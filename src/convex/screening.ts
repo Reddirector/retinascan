@@ -2,9 +2,10 @@
 
 /**
  * Demo screening logic. The real pipeline (LangGraph / SGLang) is NOT wired
- * up — this is a filename lookup against cases.json. The explanation text
- * IS generated live by an NVIDIA NIM chat model when NVIDIA_API_KEY is set;
- * otherwise it falls back to the canned explanation in cases.json.
+ * up — this is a filename lookup against cases.json. After the lookup, a
+ * full clinical screening report is assembled from the case facts. When
+ * NVIDIA_API_KEY is set, the NVIDIA NIM model fills in the report template;
+ * otherwise a deterministic in-code template is used (same output shape).
  *
  * dr_stage / dr_label / referable / gradcam_image stay fixed per filename;
  * confidence is computed in code, never stored.
@@ -25,29 +26,242 @@ interface CaseRecord {
 const NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1";
 const NVIDIA_MODEL = "nvidia/nemotron-3.5-lightning-30b-a3b";
 
-/**
- * Generate a clinical explanation via the NVIDIA NIM chat completions API
- * (OpenAI-compatible). Returns null on any failure so the caller can fall
- * back to the canned wording in cases.json.
- */
-async function generateAiExplanation(
+/* ------------------------------------------------------------------ */
+/* Per-stage report content                                            */
+/* ------------------------------------------------------------------ */
+
+interface StageContent {
+  verdictName: string;
+  findings: string[];
+  why: string;
+  lesions: string;
+  action: string;
+}
+
+function stageContent(record: CaseRecord): StageContent {
+  if (record.dr_stage === 0) {
+    return {
+      verdictName: "No Diabetic Retinopathy (Grade 0)",
+      findings: [
+        "No **microaneurysms**, hemorrhages, or hard exudates are detected in the retinal field.",
+        "Retinal blood vessels show normal caliber with no signs of **venous beading**.",
+        "No evidence of **neovascularization** is detected at the optic disc or elsewhere.",
+        "The optic disc and macula appear within normal limits and there is no obvious major imaging artifact affecting interpretation.",
+      ],
+      why: "The absence of **microaneurysms, retinal hemorrhages and hard exudates** forms a retinal lesion pattern consistent with a healthy retina. The extent and distribution of these findings are most consistent with **No DR** rather than any stage of diabetic retinopathy.",
+      lesions: "No DR lesions detected",
+      action: "Continue routine annual screening.",
+    };
+  }
+  if (record.dr_stage >= 4) {
+    return {
+      verdictName: "Proliferative Diabetic Retinopathy (Grade 4)",
+      findings: [
+        "Extensive **retinal hemorrhages** are present across multiple quadrants of the retinal field.",
+        "Clear signs of **neovascularization** are detected, consistent with proliferative disease.",
+        "**Venous beading** is visible in the mid-peripheral retinal regions.",
+        "The optic disc shows features of **fibrovascular proliferation** and there is no obvious major imaging artifact affecting interpretation.",
+      ],
+      why: "The combination of **extensive retinal hemorrhages, venous beading and neovascularization** forms a retinal lesion pattern associated with proliferative diabetic retinopathy. The extent and distribution of these findings are most consistent with **Proliferative DR** rather than earlier NPDR stages.",
+      lesions:
+        "Extensive hemorrhages detected\n   * Neovascularization detected\n   * Venous beading detected",
+      action: "Urgent ophthalmologist examination and clinical confirmation.",
+    };
+  }
+  return {
+    verdictName:
+      "Moderate Non-Proliferative Diabetic Retinopathy (NPDR), Grade 2",
+    findings: [
+      "Multiple small red lesions consistent with **microaneurysms** are visible across the retinal field.",
+      "Several **dot and blot hemorrhages** are present, particularly in the mid-peripheral retinal regions.",
+      "Small areas of **yellow-white hard exudates** are visible near the posterior pole.",
+      "No clear evidence of **neovascularization** is detected.",
+      "The optic disc appears identifiable and there is no obvious major imaging artifact affecting interpretation.",
+    ],
+    why: "The combination of **microaneurysms, retinal hemorrhages and hard exudates** forms a retinal lesion pattern associated with diabetic retinopathy. The extent and distribution of these findings are most consistent with **Moderate NPDR** rather than No DR or Mild NPDR.",
+    lesions:
+      "Microaneurysms detected\n   * Dot/blot hemorrhages detected\n   * Hard exudates detected",
+    action: "Ophthalmologist examination and clinical confirmation.",
+  };
+}
+
+/* ------------------------------------------------------------------ */
+/* Deterministic report template (also the AI fallback)                */
+/* ------------------------------------------------------------------ */
+
+function buildDeterministicReport(
+  record: CaseRecord,
+  confidence: number,
+): string {
+  const content = stageContent(record);
+  const dec = Math.floor(Math.random() * 10);
+  const conf = `${confidence}.${dec}%`;
+  const unc = `${(1000 - confidence * 10 - dec) / 10}%`;
+  const classification = record.referable ? "REFERABLE DR" : "NO REFERABLE DR";
+  const referral = record.referable ? "Yes" : "No";
+  const bullets = content.findings.map((f) => `• ${f}`).join("\n\n");
+
+  return [
+    "RETINASCAN AI",
+    "DIABETIC RETINOPATHY SCREENING REPORT",
+    "",
+    "Analysis Status: Analysis Complete",
+    "Image Quality: Good / Gradable",
+    "Eye: Right Eye (OD)",
+    "",
+    "FINAL VERDICT",
+    "",
+    `The retinal image shows **${content.verdictName}** features.`,
+    "",
+    `AI Confidence: **${conf}**`,
+    `Uncertainty: **${unc}**`,
+    `Screening Classification: **${classification}**`,
+    "",
+    "WHAT I SEE IN THE IMAGE",
+    "",
+    bullets,
+    "",
+    "WHY I CLASSIFIED IT AS DIABETIC RETINOPATHY",
+    "",
+    content.why,
+    "",
+    "EVIDENCE USED",
+    "",
+    "1. **Vision Model**",
+    "",
+    `   * Predicted DR Grade: ${record.dr_stage}`,
+    `   * Confidence: ${conf}`,
+    "",
+    "2. **Visual Evidence**",
+    "",
+    `   * ${content.lesions}`,
+    "",
+    "3. **Explainability**",
+    "",
+    "   * Grad-CAM regions overlap with areas containing the detected retinal abnormalities.",
+    "",
+    "4. **Clinical Knowledge**",
+    "",
+    "   * Retrieved DR classification criteria and clinical literature support the association between these lesion patterns and the assigned staging.",
+    "",
+    "5. **Verification**",
+    "",
+    "   * Vision prediction and detected evidence are consistent.",
+    "   * No major contradiction was identified between model output, visual evidence and retrieved clinical information.",
+    "",
+    "CLINICAL SCREENING RESULT",
+    "",
+    `**${content.verdictName}**`,
+    "",
+    `**Referral Recommended:** ${referral}`,
+    `**Recommended Action:** ${content.action}`,
+    "",
+    "AI CONFIDENCE",
+    "",
+    `**${conf} Confidence → ${content.verdictName}**`,
+    "",
+    "This is an **AI screening assessment**, not a definitive clinical diagnosis.",
+  ].join("\n");
+}
+
+/* ------------------------------------------------------------------ */
+/* NVIDIA NIM report generation (OpenAI-compatible)                    */
+/* ------------------------------------------------------------------ */
+
+async function generateAiReport(
   record: CaseRecord,
   confidence: number,
 ): Promise<string | null> {
   const apiKey = process.env.NVIDIA_API_KEY;
   if (!apiKey) return null;
 
-  const systemPrompt =
-    "You are a clinical assistant explaining diabetic retinopathy screening results. " +
-    "Write a concise, factual explanation of 2-3 sentences for the referring clinician. " +
-    "State the key findings, then the recommended follow-up timeframe. " +
-    "Do not use headings, bullet points, or markdown. Plain prose only.";
+  const content = stageContent(record);
+  const dec = Math.floor(Math.random() * 10);
+  const conf = `${confidence}.${dec}%`;
+  const unc = `${(1000 - confidence * 10 - dec) / 10}%`;
+  const classification = record.referable ? "REFERABLE DR" : "NO REFERABLE DR";
 
-  const userPrompt =
-    `Fundus screening result: DR stage ${record.dr_stage} (${record.dr_label}). ` +
-    `Referable: ${record.referable ? "yes" : "no"}. ` +
-    `Model confidence: ${confidence}%. ` +
-    "Explain this result and the recommended follow-up.";
+  const systemPrompt =
+    "You output a fixed-format clinical screening report for the RetinaScan AI demo. " +
+    "Fill the template EXACTLY as given, using ONLY the facts provided. " +
+    "Keep every section heading, bullet and line break. Keep the markdown bold (**). " +
+    "Do not add commentary, headings of your own, or thinking text. Output the report only.";
+
+  const userPrompt = [
+    "Template:",
+    "",
+    "RETINASCAN AI",
+    "DIABETIC RETINOPATHY SCREENING REPORT",
+    "",
+    "Analysis Status: Analysis Complete",
+    "Image Quality: Good / Gradable",
+    "Eye: Right Eye (OD)",
+    "",
+    "FINAL VERDICT",
+    "",
+    "The retinal image shows **<VERDICT_NAME>** features.",
+    "",
+    "AI Confidence: **<CONF>**",
+    "Uncertainty: **<UNC>**",
+    "Screening Classification: **<CLASSIFICATION>**",
+    "",
+    "WHAT I SEE IN THE IMAGE",
+    "",
+    "<FINDINGS_BULLETS>",
+    "",
+    "WHY I CLASSIFIED IT AS DIABETIC RETINOPATHY",
+    "",
+    "<WHY>",
+    "",
+    "EVIDENCE USED",
+    "",
+    "1. **Vision Model**",
+    "",
+    "   * Predicted DR Grade: <STAGE>",
+    "   * Confidence: <CONF>",
+    "",
+    "2. **Visual Evidence**",
+    "",
+    "   * <LESIONS>",
+    "",
+    "3. **Explainability**",
+    "",
+    "   * Grad-CAM regions overlap with areas containing the detected retinal abnormalities.",
+    "",
+    "4. **Clinical Knowledge**",
+    "",
+    "   * Retrieved DR classification criteria and clinical literature support the association between these lesion patterns and the assigned staging.",
+    "",
+    "5. **Verification**",
+    "",
+    "   * Vision prediction and detected evidence are consistent.",
+    "   * No major contradiction was identified between model output, visual evidence and retrieved clinical information.",
+    "",
+    "CLINICAL SCREENING RESULT",
+    "",
+    "**<VERDICT_NAME>**",
+    "",
+    "**Referral Recommended:** <REFERRAL>",
+    "**Recommended Action:** <ACTION>",
+    "",
+    "AI CONFIDENCE",
+    "",
+    "**<CONF> Confidence → <VERDICT_NAME>**",
+    "",
+    "This is an **AI screening assessment**, not a definitive clinical diagnosis.",
+    "",
+    "Facts to fill in:",
+    `- VERDICT_NAME: ${content.verdictName}`,
+    `- CONF: ${conf}`,
+    `- UNC: ${unc}`,
+    `- CLASSIFICATION: ${classification}`,
+    `- FINDINGS_BULLETS: ${content.findings.map((f) => `• ${f}`).join(" ")}`,
+    `- WHY: ${content.why}`,
+    `- STAGE: ${record.dr_stage}`,
+    `- LESIONS: ${content.lesions}`,
+    `- REFERRAL: ${record.referable ? "Yes" : "No"}`,
+    `- ACTION: ${content.action}`,
+  ].join("\n");
 
   const call = async (): Promise<Response> => {
     return fetch(`${NVIDIA_BASE_URL}/chat/completions`, {
@@ -64,10 +278,10 @@ async function generateAiExplanation(
         ],
         temperature: 1,
         top_p: 0.95,
-        max_tokens: 512,
+        max_tokens: 2048,
         stream: false,
         // Thinking mode adds latency for reasoning tokens we don't display;
-        // disabled so the explanation is ready when the animation finishes.
+        // disabled so the report is ready when the animation finishes.
         chat_template_kwargs: { enable_thinking: false },
       }),
     });
@@ -88,9 +302,13 @@ async function generateAiExplanation(
     const data = (await res.json()) as {
       choices?: { message?: { content?: unknown } }[];
     };
-    const content = data.choices?.[0]?.message?.content;
-    if (typeof content === "string" && content.trim().length > 0) {
-      return content.trim();
+    const text = data.choices?.[0]?.message?.content;
+    if (
+      typeof text === "string" &&
+      text.includes("RETINASCAN AI") &&
+      text.includes("FINAL VERDICT")
+    ) {
+      return text.trim();
     }
     return null;
   } catch (error) {
@@ -98,6 +316,10 @@ async function generateAiExplanation(
     return null;
   }
 }
+
+/* ------------------------------------------------------------------ */
+/* Screening action                                                    */
+/* ------------------------------------------------------------------ */
 
 export const screen = internalAction({
   args: { filename: v.string() },
@@ -115,9 +337,11 @@ export const screen = internalAction({
     // Randomized per request (90-96 inclusive) — never stored in cases.json.
     const confidence = 90 + Math.floor(Math.random() * 7);
 
-    // Prefer a live model-generated explanation; fall back to the canned
-    // wording in cases.json if the key is missing or the call fails.
-    const aiExplanation = await generateAiExplanation(record, confidence);
+    // Full report: NVIDIA fills the template when the key is set; otherwise
+    // the identical deterministic template is used. Latency is hidden under
+    // the frontend's staged pipeline animation.
+    const aiReport = await generateAiReport(record, confidence);
+    const report = aiReport ?? buildDeterministicReport(record, confidence);
 
     return {
       matched: true as const,
@@ -126,8 +350,9 @@ export const screen = internalAction({
       dr_label: record.dr_label,
       referable: record.referable,
       gradcam_image: record.gradcam_image,
-      explanation: aiExplanation ?? record.explanation,
-      explanation_source: aiExplanation ? ("ai" as const) : ("canned" as const),
+      explanation: record.explanation,
+      report,
+      report_source: aiReport ? ("ai" as const) : ("template" as const),
       confidence,
     };
   },

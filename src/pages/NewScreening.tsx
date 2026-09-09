@@ -29,6 +29,8 @@ interface MatchedResult {
   referable: boolean;
   gradcam_image: string;
   explanation: string;
+  report: string;
+  report_source: "ai" | "template";
   confidence: number;
 }
 
@@ -256,7 +258,8 @@ export default function NewScreening() {
           );
           setIsRunning(false);
 
-          const words = result.explanation.split(/\s+/);
+          const words = result.report.split(/\s+/);
+          // ~30ms per word keeps the full report's reveal brisk.
           wordIntervalRef.current = setInterval(() => {
             setVisibleWords((prev) => {
               if (prev >= words.length) {
@@ -268,7 +271,7 @@ export default function NewScreening() {
               }
               return prev + 1;
             });
-          }, 90);
+          }, 30);
         }, elapsed),
       );
     },
@@ -335,9 +338,21 @@ export default function NewScreening() {
 /* ------------------------------------------------------------------ */
 
   const result = screening?.result ?? null;
-  const words = result ? result.explanation.split(/\s+/) : [];
+  const words = result ? result.report.split(/\s+/) : [];
   const revealedWords = words.slice(0, visibleWords);
   const isStreaming = result !== null && visibleWords < words.length;
+
+  /** Render markdown **bold** in a (possibly still-streaming) text chunk. */
+  const renderBold = (text: string) => {
+    const parts = text.split("**");
+    return parts.map((part, i) =>
+      i % 2 === 1 ? (
+        <strong key={i}>{part}</strong>
+      ) : (
+        <span key={i}>{part}</span>
+      ),
+    );
+  };
 
   return (
     <AppShell>
@@ -564,12 +579,19 @@ export default function NewScreening() {
                 )}
               </AnimatePresence>
 
-              {/* Chat pane — word-by-word explanation reveal */}
-              <div className="nb-border flex min-h-[16rem] flex-col bg-card">
-                <div className="border-b-2 bg-muted px-4 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  AI Explanation
+              {/* Chat pane — word-by-word report reveal */}
+              <div className="nb-border flex max-h-[44rem] flex-col bg-card">
+                <div className="flex items-center justify-between border-b-2 bg-muted px-4 py-2">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Screening Report
+                  </span>
+                  {result && (
+                    <span className="nb-mono text-xs text-muted-foreground">
+                      {result.report_source === "ai" ? "live model" : "template"}
+                    </span>
+                  )}
                 </div>
-                <div className="flex-1 space-y-3 p-4 text-sm leading-6">
+                <div className="flex-1 space-y-3 overflow-y-auto p-4 text-sm leading-6">
                   {/* Echo the uploaded image name as the first response */}
                   <div className="flex justify-end">
                     <span
@@ -589,14 +611,15 @@ export default function NewScreening() {
                       <span className="nb-mono"> eyescan1 / eyescan2 / eyescan3</span>
                     </div>
                   ) : result ? (
-                    <p aria-live="polite">
-                      {revealedWords.map((w, idx) => (
-                        <span key={idx}>{w} </span>
-                      ))}
+                    <div
+                      aria-live="polite"
+                      className="whitespace-pre-wrap text-[13px] leading-6"
+                    >
+                      {renderBold(revealedWords.join(" "))}
                       {isStreaming && (
                         <span className="nb-mono animate-pulse">▌</span>
                       )}
-                    </p>
+                    </div>
                   ) : (
                     <p className="text-sm text-muted-foreground">
                       {isRunning
