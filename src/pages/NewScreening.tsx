@@ -164,35 +164,29 @@ export default function NewScreening() {
       setVisibleWords(0);
       setIsRunning(true);
 
-      // Backend lookup (fast — the animation owns the pacing).
-      let result: MatchedResult | null = null;
-      let notMatched = false;
-      let error: string | null = null;
-      try {
-        const form = new FormData();
-        form.append("file", file);
-        const res = await fetch("/api/screen", { method: "POST", body: form });
-        const data = await res.json();
-        if (!res.ok) {
-          error = data?.error ?? "Screening request failed.";
-        } else if (data.matched) {
-          result = data as MatchedResult;
-        } else {
-          notMatched = true;
+      // Backend lookup — may include a live AI explanation call, so it is
+      // kicked off in parallel with the animation and awaited at the reveal.
+      type ScreenResponse =
+        | { error: string }
+        | { matched: false }
+        | MatchedResult;
+      const fetchPromise = (async (): Promise<ScreenResponse> => {
+        try {
+          const form = new FormData();
+          form.append("file", file);
+          const res = await fetch("/api/screen", {
+            method: "POST",
+            body: form,
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            return { error: data?.error ?? "Screening request failed." };
+          }
+          return data as ScreenResponse;
+        } catch {
+          return { error: "Could not reach the screening service." };
         }
-      } catch {
-        error = "Could not reach the screening service.";
-      }
-
-      if (error || notMatched || !result) {
-        setScreening((s) =>
-          s && s.file === file
-            ? { ...s, result: null, notMatched, error }
-            : s,
-        );
-        setIsRunning(false);
-        return;
-      }
+      })();
 
       // Choreograph the 6-stage pipeline with randomized per-stage timing.
       let elapsed = 0;
@@ -224,15 +218,39 @@ export default function NewScreening() {
         elapsed += duration;
       }
 
-      // Pipeline finished — reveal the DiagnosisCard + start word streaming.
+      // Pipeline finished — resolve the backend response (AI explanation
+      // latency is hidden under the animation), reveal the DiagnosisCard,
+      // and start word streaming.
       timersRef.current.push(
-        setTimeout(() => {
+        setTimeout(async () => {
           setStageStatuses((prev) => {
             const next = [...prev];
             next[TOTAL_STAGES - 1] = "complete";
             return next;
           });
           setActiveStatusLine(null);
+
+          const data = await fetchPromise;
+          if ("error" in data) {
+            setScreening((s) =>
+              s && s.file === file
+                ? { ...s, result: null, notMatched: false, error: data.error }
+                : s,
+            );
+            setIsRunning(false);
+            return;
+          }
+          if (!data.matched) {
+            setScreening((s) =>
+              s && s.file === file
+                ? { ...s, result: null, notMatched: true, error: null }
+                : s,
+            );
+            setIsRunning(false);
+            return;
+          }
+
+          const result: MatchedResult = data;
           setScreening((s) =>
             s && s.file === file ? { ...s, result, error: null } : s,
           );

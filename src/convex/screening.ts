@@ -1,15 +1,13 @@
 "use node";
 
 /**
- * Demo screening logic. The real pipeline (LangGraph / SGLang / model
- * inference) is NOT wired up — this is a filename lookup against
- * cases.json with a freshly randomized confidence per request.
+ * Demo screening logic. The real pipeline (LangGraph / SGLang) is NOT wired
+ * up — this is a filename lookup against cases.json. The explanation text
+ * IS generated live by an NVIDIA NIM chat model when NVIDIA_API_KEY is set;
+ * otherwise it falls back to the canned explanation in cases.json.
  *
- * cases.json is imported as a module so Convex re-bundles it on every
- * deploy: editing the file (adding cases, swapping wording) is picked up
- * on the next request without any code changes or manual restarts.
- * dr_stage / dr_label / referable / gradcam_image / explanation are fixed
- * per filename; confidence is computed in code, never stored.
+ * dr_stage / dr_label / referable / gradcam_image stay fixed per filename;
+ * confidence is computed in code, never stored.
  */
 
 import { internalAction } from "./_generated/server";
@@ -22,6 +20,73 @@ interface CaseRecord {
   referable: boolean;
   gradcam_image: string;
   explanation: string;
+}
+
+const NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1";
+const NVIDIA_MODEL = "nvidia/nemotron-3-ultra-550b-a55b";
+
+/**
+ * Generate a clinical explanation via the NVIDIA NIM chat completions API
+ * (OpenAI-compatible). Returns null on any failure so the caller can fall
+ * back to the canned wording in cases.json.
+ */
+async function generateAiExplanation(
+  record: CaseRecord,
+  confidence: number,
+): Promise<string | null> {
+  const apiKey = process.env.NVIDIA_API_KEY;
+  if (!apiKey) return null;
+
+  const systemPrompt =
+    "You are a clinical assistant explaining diabetic retinopathy screening results. " +
+    "Write a concise, factual explanation of 2-3 sentences for the referring clinician. " +
+    "State the key findings, then the recommended follow-up timeframe. " +
+    "Do not use headings, bullet points, or markdown. Plain prose only.";
+
+  const userPrompt =
+    `Fundus screening result: DR stage ${record.dr_stage} (${record.dr_label}). ` +
+    `Referable: ${record.referable ? "yes" : "no"}. ` +
+    `Model confidence: ${confidence}%. ` +
+    "Explain this result and the recommended follow-up.";
+
+  try {
+    const res = await fetch(`${NVIDIA_BASE_URL}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: NVIDIA_MODEL,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+        temperature: 1,
+        top_p: 0.95,
+        max_tokens: 512,
+        stream: false,
+        // Thinking mode adds latency for reasoning tokens we don't display;
+        // disabled so the explanation is ready when the animation finishes.
+        chat_template_kwargs: { enable_thinking: false },
+      }),
+    });
+    if (!res.ok) {
+      console.error("[screening] NVIDIA API error:", res.status);
+      return null;
+    }
+    const data = (await res.json()) as {
+      choices?: { message?: { content?: unknown } }[];
+    };
+    const content = data.choices?.[0]?.message?.content;
+    if (typeof content === "string" && content.trim().length > 0) {
+      return content.trim();
+    }
+    return null;
+  } catch (error) {
+    console.error("[screening] NVIDIA API call failed:", error);
+    return null;
+  }
 }
 
 export const screen = internalAction({
@@ -40,6 +105,10 @@ export const screen = internalAction({
     // Randomized per request (90-96 inclusive) — never stored in cases.json.
     const confidence = 90 + Math.floor(Math.random() * 7);
 
+    // Prefer a live model-generated explanation; fall back to the canned
+    // wording in cases.json if the key is missing or the call fails.
+    const aiExplanation = await generateAiExplanation(record, confidence);
+
     return {
       matched: true as const,
       matched_key: key,
@@ -47,7 +116,8 @@ export const screen = internalAction({
       dr_label: record.dr_label,
       referable: record.referable,
       gradcam_image: record.gradcam_image,
-      explanation: record.explanation,
+      explanation: aiExplanation ?? record.explanation,
+      explanation_source: aiExplanation ? ("ai" as const) : ("canned" as const),
       confidence,
     };
   },
