@@ -402,8 +402,16 @@ export default function NewScreening() {
             {/* Left column: image preview + pipeline */}
             <div className="flex flex-col gap-6">
               <div className="nb-border overflow-hidden bg-card">
-                <div className="border-b-2 bg-muted px-4 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Uploaded Fundus Image
+                <div className="flex items-center justify-between gap-3 border-b-2 bg-muted px-4 py-2">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Uploaded Fundus Image
+                  </span>
+                  <span
+                    className="nb-mono max-w-[14rem] truncate text-xs font-bold"
+                    title={screening.file.name}
+                  >
+                    {screening.file.name}
+                  </span>
                 </div>
                 <img
                   src={screening.previewUrl}
@@ -544,6 +552,15 @@ export default function NewScreening() {
                   AI Explanation
                 </div>
                 <div className="flex-1 space-y-3 p-4 text-sm leading-6">
+                  {/* Echo the uploaded image name as the first response */}
+                  <div className="flex justify-end">
+                    <span
+                      className="nb-mono max-w-[16rem] truncate border-2 bg-secondary px-3 py-1.5 text-xs font-bold text-secondary-foreground"
+                      title={screening.file.name}
+                    >
+                      {screening.file.name}
+                    </span>
+                  </div>
                   {screening.error ? (
                     <div className="border-2 border-destructive bg-destructive/10 p-3 text-sm text-destructive">
                       {screening.error}
@@ -565,7 +582,7 @@ export default function NewScreening() {
                   ) : (
                     <p className="text-sm text-muted-foreground">
                       {isRunning
-                        ? "Pipeline running — results will appear here."
+                        ? `Received ${screening.file.name} — running screening pipeline...`
                         : "Waiting for pipeline..."}
                     </p>
                   )}
