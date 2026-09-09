@@ -14,7 +14,6 @@ import { ScreeningHistoryProvider } from "./context/ScreeningHistoryContext";
 const Landing = lazy(() => import("./pages/Landing.tsx"));
 const AuthPage = lazy(() => import("./pages/Auth.tsx"));
 const Dashboard = lazy(() => import("./pages/Dashboard.tsx"));
-const NewScreening = lazy(() => import("./pages/NewScreening.tsx"));
 const Chat = lazy(() => import("./pages/Chat.tsx"));
 const NotFound = lazy(() => import("./pages/NotFound.tsx"));
 
@@ -126,21 +125,13 @@ createRoot(document.getElementById("root")!).render(
                 <Route path="/" element={<Landing />} />
                 <Route
                   path="/auth"
-                  element={<AuthPage redirectAfterAuth="/dashboard" />}
+                  element={<AuthPage redirectAfterAuth="/chat" />}
                 />
                 <Route
                   path="/dashboard"
                   element={
                     <RequireAuth>
                       <Dashboard />
-                    </RequireAuth>
-                  }
-                />
-                <Route
-                  path="/new-screening"
-                  element={
-                    <RequireAuth>
-                      <NewScreening />
                     </RequireAuth>
                   }
                 />

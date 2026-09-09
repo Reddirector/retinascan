@@ -5,7 +5,6 @@ import {
   History,
   LayoutDashboard,
   LogOut,
-  MessageSquare,
   ScanEye,
   type LucideIcon,
 } from "lucide-react";
@@ -19,8 +18,7 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { label: "New Screening", icon: ScanEye, to: "/new-screening" },
-  { label: "AI Chat", icon: MessageSquare, to: "/chat" },
+  { label: "New Screening", icon: ScanEye, to: "/chat" },
   { label: "History", icon: History, to: "/dashboard" },
 ];
 
@@ -131,21 +129,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             type="button"
             variant="ghost"
             size="icon"
-            onClick={() => navigate("/new-screening")}
+            onClick={() => navigate("/chat")}
             className="cursor-pointer rounded-none border-2"
             aria-label="New Screening"
           >
             <ScanEye className="size-4" />
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            onClick={() => navigate("/chat")}
-            className="cursor-pointer rounded-none border-2"
-            aria-label="AI Chat"
-          >
-            <MessageSquare className="size-4" />
           </Button>
           <Button
             type="button"
