@@ -153,7 +153,6 @@
 
 @layer utilities {
   .nb-border {
-  .nb-border {
     border: 2px solid var(--border);
   }
   .nb-border-t-2 {
