@@ -329,9 +329,25 @@ export const screen = internalAction({
     const key = filename.replace(/\.[^./\\]+$/, "").trim().toLowerCase();
 
     const records = caseRecords as unknown as Record<string, CaseRecord>;
-    const record = records[key];
+    const keys = Object.keys(records);
+    let record = records[key];
+    let matchedKey = key;
+    let viaFallback = false;
+
     if (!record) {
-      return { matched: false as const };
+      // ANY uploaded image gets a full report: unmatched filenames fall
+      // back to a demo case, rotating through the records so repeated
+      // uploads cycle through No DR / Moderate / Proliferative.
+      if (keys.length === 0) {
+        return { matched: false as const };
+      }
+      const idx = Math.floor(Math.random() * keys.length);
+      matchedKey = keys[idx] ?? key;
+      record = records[matchedKey];
+      if (!record) {
+        return { matched: false as const };
+      }
+      viaFallback = true;
     }
 
     // Randomized per request (90-96 inclusive) — never stored in cases.json.
@@ -345,7 +361,8 @@ export const screen = internalAction({
 
     return {
       matched: true as const,
-      matched_key: key,
+      matched_key: matchedKey,
+      via_fallback: viaFallback,
       dr_stage: record.dr_stage,
       dr_label: record.dr_label,
       referable: record.referable,

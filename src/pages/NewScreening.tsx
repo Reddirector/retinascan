@@ -24,6 +24,7 @@ import { cn } from "@/lib/utils";
 interface MatchedResult {
   matched: true;
   matched_key: string;
+  via_fallback: boolean;
   dr_stage: number;
   dr_label: string;
   referable: boolean;
@@ -533,6 +534,7 @@ export default function NewScreening() {
                       </span>
                       <span className="nb-mono text-xs text-muted-foreground">
                         {result.matched_key}
+                        {result.via_fallback ? " · demo case" : ""}
                       </span>
                     </div>
                     <div className="flex flex-col gap-4 p-4">
