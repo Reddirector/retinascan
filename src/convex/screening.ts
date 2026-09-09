@@ -284,6 +284,8 @@ async function generateAiReport(
         // disabled so the report is ready when the animation finishes.
         chat_template_kwargs: { enable_thinking: false },
       }),
+      // Hard timeout so a hung NVIDIA request can't stall the action.
+      signal: AbortSignal.timeout(30_000),
     });
   };
 
@@ -397,6 +399,8 @@ export const chat = action({
           stream: false,
           chat_template_kwargs: { enable_thinking: false },
         }),
+        // Hard timeout so a hung NVIDIA request can't stall the action.
+        signal: AbortSignal.timeout(30_000),
       });
     };
 

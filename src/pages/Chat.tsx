@@ -342,10 +342,14 @@ export default function Chat() {
       // Screening lookup — called directly via the Convex action (no HTTP
       // round-trip to a separate domain). May include a live AI report call,
       // so it runs in parallel with the animation and is awaited at the
-      // reveal. On any failure the guaranteed report is used instead.
-      const fetchPromise = runScreening({ filename: file.name }).catch(
-        () => guaranteedResult(),
-      );
+      // reveal. A hard 40s timeout + catch guarantee the guaranteed report
+      // is used if the action hangs or fails — the chat can never lock up.
+      const fetchPromise = Promise.race([
+        runScreening({ filename: file.name }),
+        new Promise<MatchedResult>((resolve) =>
+          setTimeout(() => resolve(guaranteedResult()), 40000),
+        ),
+      ]).catch(() => guaranteedResult());
 
       // Choreograph the 6-stage pipeline with randomized per-stage timing.
       let elapsed = 0;
@@ -447,19 +451,33 @@ export default function Chat() {
     setBusy(true);
 
     try {
-      const res = await sendChat({
-        question: trimmed,
-        history,
-        ...(report
-          ? {
-              report: report.report,
-              dr_stage: report.dr_stage,
-              dr_label: report.dr_label,
-              referable: report.referable,
-              confidence: report.confidence,
-            }
-          : {}),
-      });
+      // Hard 45s frontend timeout so a stalled Convex call can never leave
+      // the input locked (busy stuck true) forever.
+      const res = await Promise.race([
+        sendChat({
+          question: trimmed,
+          history,
+          ...(report
+            ? {
+                report: report.report,
+                dr_stage: report.dr_stage,
+                dr_label: report.dr_label,
+                referable: report.referable,
+                confidence: report.confidence,
+              }
+            : {}),
+        }),
+        new Promise<{ reply: string }>((resolve) =>
+          setTimeout(
+            () =>
+              resolve({
+                reply:
+                  "The AI service took too long to respond. Please try again in a moment.",
+              }),
+            45000,
+          ),
+        ),
+      ]);
       pushEntry({ kind: "assistant", text: res.reply });
     } catch {
       pushEntry({
@@ -777,11 +795,11 @@ export default function Chat() {
               onChange={(e) => setInput(e.target.value)}
               placeholder={
                 isRunning
-                  ? "Screening in progress..."
+                  ? "Screening in progress — you can keep typing..."
                   : "Ask a question or attach an image..."
               }
               className="min-w-0 flex-1 border-2 bg-card px-3 py-2 text-sm outline-none placeholder:text-muted-foreground focus:border-ring"
-              disabled={busy || isRunning}
+              disabled={busy}
             />
             <Button
               type="submit"
@@ -798,7 +816,7 @@ export default function Chat() {
                 variant="outline"
                 size="icon"
                 onClick={handleClear}
-                disabled={busy || isRunning}
+                disabled={busy}
                 className="cursor-pointer rounded-none border-2"
                 aria-label="Clear conversation"
               >
