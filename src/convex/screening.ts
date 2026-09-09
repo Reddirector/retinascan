@@ -11,7 +11,7 @@
  * confidence is computed in code, never stored.
  */
 
-import { internalAction } from "./_generated/server";
+import { action, internalAction } from "./_generated/server";
 import { v } from "convex/values";
 import caseRecords from "./cases.json";
 
@@ -316,6 +316,112 @@ async function generateAiReport(
     return null;
   }
 }
+
+/* ------------------------------------------------------------------ */
+/* Follow-up chat action                                               */
+/* ------------------------------------------------------------------ */
+
+export const chat = action({
+  args: {
+    question: v.string(),
+    report: v.string(),
+    dr_stage: v.number(),
+    dr_label: v.string(),
+    referable: v.boolean(),
+    confidence: v.number(),
+    history: v.array(
+      v.object({
+        role: v.union(v.literal("user"), v.literal("assistant")),
+        content: v.string(),
+      }),
+    ),
+  },
+  handler: async (_ctx, { question, report, dr_stage, dr_label, referable, confidence, history }) => {
+    const apiKey = process.env.NVIDIA_API_KEY;
+    if (!apiKey) {
+      // Deterministic fallback when no key is configured.
+      const action = referable
+        ? "Ophthalmologist referral is recommended."
+        : "Routine annual screening is recommended.";
+      return {
+        reply:
+          `Based on the screening report: DR stage ${dr_stage} (${dr_label}) ` +
+          `with ${confidence}% confidence. ${action} ` +
+          "(Configure NVIDIA_API_KEY to enable live AI answers.)",
+        source: "template" as const,
+      };
+    }
+
+    const systemPrompt =
+      "You are RetinaScan AI's clinical follow-up assistant. Answer questions about " +
+      "the screening report provided. Be concise (1-3 sentences unless asked for detail), "
+      "factual, and grounded in the report facts. You are an AI screening tool, not a "
+      "definitive clinical diagnosis. Plain prose only, no markdown headings.";
+
+    const userPrompt =
+      `Screening report for context:\n\n${report}\n\n` +
+      `Case facts: DR stage ${dr_stage} (${dr_label}), referable: ${referable}, confidence: ${confidence}%.\n\n` +
+      `The user asks: ${question}`;
+
+    const call = async (): Promise<Response> => {
+      return fetch(`${NVIDIA_BASE_URL}/chat/completions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: NVIDIA_MODEL,
+          messages: [
+            { role: "system", content: systemPrompt },
+            ...history,
+            { role: "user", content: userPrompt },
+          ],
+          temperature: 1,
+          top_p: 0.95,
+          max_tokens: 512,
+          stream: false,
+          chat_template_kwargs: { enable_thinking: false },
+        }),
+      });
+    };
+
+    try {
+      let res = await call();
+      if (res.status === 503 || res.status === 429) {
+        await new Promise((r) => setTimeout(r, 2000));
+        res = await call();
+      }
+      if (!res.ok) {
+        console.error("[chat] NVIDIA API error:", res.status);
+        return {
+          reply:
+            "The AI service is temporarily unavailable. Please try again in a moment.",
+          source: "error" as const,
+        };
+      }
+      const data = (await res.json()) as {
+        choices?: { message?: { content?: unknown } }[];
+      };
+      const content = data.choices?.[0]?.message?.content;
+      if (typeof content === "string" && content.trim().length > 0) {
+        return { reply: content.trim(), source: "ai" as const };
+      }
+      return {
+        reply:
+          "The AI service returned an empty response. Please try again.",
+        source: "error" as const,
+      };
+    } catch (error) {
+      console.error("[chat] NVIDIA API call failed:", error);
+      return {
+        reply:
+          "Could not reach the AI service. Please check the connection and try again.",
+        source: "error" as const,
+      };
+    }
+  },
+});
 
 /* ------------------------------------------------------------------ */
 /* Screening action                                                    */

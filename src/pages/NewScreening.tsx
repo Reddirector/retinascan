@@ -5,6 +5,7 @@ import {
   BrainCircuit,
   Check,
   FileSearch,
+  Loader2,
   ScanEye,
   Send,
   ShieldCheck,
@@ -15,6 +16,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { AppShell, DrStageBadge } from "@/components/AppShell";
 import { useScreeningHistory } from "@/context/ScreeningHistoryContext";
+import { api } from "@/convex/_generated/api";
+import { useAction } from "convex/react";
 import { cn } from "@/lib/utils";
 
 /* ------------------------------------------------------------------ */
@@ -143,6 +146,17 @@ export default function NewScreening() {
   const wordIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const { addResult } = useScreeningHistory();
+  const sendChat = useAction(api.screening.chat);
+
+  /* Follow-up chat state (shown after the report finishes streaming) */
+  interface ChatMessage {
+    role: "user" | "assistant";
+    content: string;
+  }
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatInput, setChatInput] = useState("");
+  const [chatBusy, setChatBusy] = useState(false);
+  const chatEndRef = useRef<HTMLDivElement>(null);
 
   const clearTimers = useCallback(() => {
     timersRef.current.forEach(clearTimeout);
@@ -154,6 +168,13 @@ export default function NewScreening() {
   }, []);
 
   useEffect(() => clearTimers, [clearTimers]);
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "nearest",
+    });
+  }, [chatMessages, chatBusy]);
 
   /* ---------------------------------------------------------------- */
   /* Screening run                                                     */
@@ -286,6 +307,8 @@ export default function NewScreening() {
       setActiveStatusLine(null);
       setVisibleWords(0);
       setIsRunning(false);
+      setChatMessages([]);
+      setChatInput("");
       setScreening((prev) => {
         if (prev?.previewUrl) URL.revokeObjectURL(prev.previewUrl);
         return {
@@ -331,6 +354,8 @@ export default function NewScreening() {
     setActiveStatusLine(null);
     setVisibleWords(0);
     setIsRunning(false);
+    setChatMessages([]);
+    setChatInput("");
     if (fileInputRef.current) fileInputRef.current.value = "";
   }, [clearTimers]);
 
@@ -342,6 +367,7 @@ export default function NewScreening() {
   const words = result ? result.report.split(/\s+/) : [];
   const revealedWords = words.slice(0, visibleWords);
   const isStreaming = result !== null && visibleWords < words.length;
+  const chatReady = result !== null && !isStreaming;
 
   /** Render markdown **bold** in a (possibly still-streaming) text chunk. */
   const renderBold = (text: string) => {
@@ -353,6 +379,49 @@ export default function NewScreening() {
         <span key={i}>{part}</span>
       ),
     );
+  };
+
+  const handleChatSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const question = chatInput.trim();
+    if (!question || !result || chatBusy) return;
+
+    const userMsg: ChatMessage = { role: "user", content: question };
+    const history = chatMessages.map(({ role, content }) => ({
+      role,
+      content,
+    }));
+
+    setChatMessages((prev) => [...prev, userMsg]);
+    setChatInput("");
+    setChatBusy(true);
+
+    try {
+      const res = await sendChat({
+        question,
+        report: result.report,
+        dr_stage: result.dr_stage,
+        dr_label: result.dr_label,
+        referable: result.referable,
+        confidence: result.confidence,
+        history,
+      });
+      setChatMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: res.reply },
+      ]);
+    } catch {
+      setChatMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content:
+            "Could not reach the AI service. Please try again in a moment.",
+        },
+      ]);
+    } finally {
+      setChatBusy(false);
+    }
   };
 
   return (
@@ -632,6 +701,83 @@ export default function NewScreening() {
                 </div>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Follow-up chat — appears after the report finishes streaming */}
+        {chatReady && (
+          <div className="nb-border bg-card">
+            <div className="flex items-center justify-between border-b-2 bg-muted px-4 py-2">
+              <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Follow-up Chat
+              </span>
+              {chatMessages.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setChatMessages([])}
+                  className="nb-mono cursor-pointer text-xs text-muted-foreground hover:text-foreground"
+                >
+                  clear
+                </button>
+              )}
+            </div>
+            <div className="max-h-[20rem] space-y-3 overflow-y-auto p-4">
+              {chatMessages.length === 0 && (
+                <p className="text-sm text-muted-foreground">
+                  Ask a follow-up question about this screening — e.g. “Why is
+                  this referable?” or “What does Grade 2 mean?”
+                </p>
+              )}
+              {chatMessages.map((m, i) => (
+                <div
+                  key={i}
+                  className={
+                    m.role === "user"
+                      ? "flex justify-end"
+                      : "flex justify-start"
+                  }
+                >
+                  <span
+                    className={
+                      m.role === "user"
+                        ? "max-w-[80%] border-2 bg-secondary px-3 py-1.5 text-sm text-secondary-foreground"
+                        : "max-w-[85%] border-2 bg-card px-3 py-1.5 text-sm"
+                    }
+                  >
+                    {m.content}
+                  </span>
+                </div>
+              ))}
+              {chatBusy && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="size-4 animate-spin" />
+                  thinking...
+                </div>
+              )}
+              <div ref={chatEndRef} />
+            </div>
+            <form
+              onSubmit={handleChatSubmit}
+              className="flex items-center gap-2 border-t-2 bg-muted p-3"
+            >
+              <input
+                type="text"
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                placeholder="Ask a follow-up question..."
+                className="min-w-0 flex-1 border-2 bg-card px-3 py-2 text-sm outline-none placeholder:text-muted-foreground focus:border-ring"
+                disabled={chatBusy}
+              />
+              <Button
+                type="submit"
+                size="sm"
+                disabled={chatBusy || !chatInput.trim()}
+                className="cursor-pointer gap-1.5 rounded-none border-2 font-semibold"
+              >
+                <Send className="size-3.5" />
+                Send
+              </Button>
+            </form>
           </div>
         )}
       </div>
