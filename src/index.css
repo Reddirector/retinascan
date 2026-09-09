@@ -131,8 +131,28 @@
   }
 }
 
-/* Neobrutalism utility classes — solid-color state changes only, no gradients/glow/shadow-as-depth */
+/* Scoped light tokens for the chat panel: the app runs dark, but the chat
+   surface stays white with strong black borders (neobrutalist contrast). */
+.chat-surface {
+  --background: oklch(0.985 0.005 100);
+  --foreground: oklch(0.2 0.02 100);
+  --card: oklch(0.985 0.005 100);
+  --card-foreground: oklch(0.2 0.02 100);
+  --popover: oklch(0.985 0.005 100);
+  --popover-foreground: oklch(0.2 0.02 100);
+  --secondary: oklch(0.85 0.1 95);
+  --secondary-foreground: oklch(0.2 0.02 100);
+  --muted: oklch(0.92 0.01 100);
+  --muted-foreground: oklch(0.45 0.02 100);
+  --accent: oklch(0.85 0.1 95);
+  --accent-foreground: oklch(0.2 0.02 100);
+  --border: oklch(0.2 0.02 100);
+  --input: oklch(0.2 0.02 100);
+  --ring: oklch(0.42 0.12 250);
+}
+
 @layer utilities {
+  .nb-border {
   .nb-border {
     border: 2px solid var(--border);
   }

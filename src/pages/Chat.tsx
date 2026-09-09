@@ -527,7 +527,7 @@ export default function Chat() {
         </header>
 
         <div
-          className="nb-border flex min-h-[32rem] flex-col bg-card"
+          className="chat-surface nb-border flex min-h-[32rem] flex-col bg-card"
           onDragOver={(e) => {
             e.preventDefault();
             setIsDragging(true);
