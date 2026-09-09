@@ -53,11 +53,11 @@
   --popover-foreground: oklch(0.2 0.02 100);
   --primary: oklch(0.42 0.12 250);
   --primary-foreground: oklch(0.985 0.01 250);
-  --secondary: oklch(0.85 0.1 95);
+  --secondary: oklch(0.85 0.1 145);
   --secondary-foreground: oklch(0.2 0.02 100);
   --muted: oklch(0.92 0.01 100);
   --muted-foreground: oklch(0.45 0.02 100);
-  --accent: oklch(0.85 0.1 95);
+  --accent: oklch(0.85 0.1 145);
   --accent-foreground: oklch(0.2 0.02 100);
   --destructive: oklch(0.577 0.245 27.325);
   --border: oklch(0.2 0.02 100);
@@ -72,7 +72,7 @@
   --sidebar-foreground: oklch(0.2 0.02 100);
   --sidebar-primary: oklch(0.42 0.12 250);
   --sidebar-primary-foreground: oklch(0.985 0.01 250);
-  --sidebar-accent: oklch(0.85 0.1 95);
+  --sidebar-accent: oklch(0.85 0.1 145);
   --sidebar-accent-foreground: oklch(0.2 0.02 100);
   --sidebar-border: oklch(0.2 0.02 100);
   --sidebar-ring: oklch(0.42 0.12 250);
@@ -93,12 +93,12 @@
   --popover-foreground: oklch(0.95 0.01 100);
   --primary: oklch(0.7 0.12 250);
   --primary-foreground: oklch(0.18 0.01 100);
-  --secondary: oklch(0.75 0.12 95);
-  --secondary-foreground: oklch(0.18 0.01 100);
+  --secondary: oklch(0.7 0.15 145);
+  --secondary-foreground: oklch(0.15 0.03 145);
   --muted: oklch(0.35 0.01 100);
   --muted-foreground: oklch(0.7 0.01 100);
-  --accent: oklch(0.75 0.12 95);
-  --accent-foreground: oklch(0.18 0.01 100);
+  --accent: oklch(0.7 0.15 145);
+  --accent-foreground: oklch(0.15 0.03 145);
   --destructive: oklch(0.704 0.191 22.216);
   --border: oklch(0.95 0.01 100);
   --input: oklch(0.95 0.01 100);
@@ -112,8 +112,8 @@
   --sidebar-foreground: oklch(0.95 0.01 100);
   --sidebar-primary: oklch(0.7 0.12 250);
   --sidebar-primary-foreground: oklch(0.18 0.01 100);
-  --sidebar-accent: oklch(0.75 0.12 95);
-  --sidebar-accent-foreground: oklch(0.18 0.01 100);
+  --sidebar-accent: oklch(0.7 0.15 145);
+  --sidebar-accent-foreground: oklch(0.15 0.03 145);
   --sidebar-border: oklch(0.95 0.01 100);
   --sidebar-ring: oklch(0.7 0.12 250);
 }
@@ -135,20 +135,20 @@
    surface stays white with strong black borders (neobrutalist contrast). */
 .chat-surface {
   --background: oklch(0.985 0.005 100);
-  --foreground: oklch(0.2 0.02 100);
+  --foreground: oklch(0.15 0.02 100);
   --card: oklch(0.985 0.005 100);
-  --card-foreground: oklch(0.2 0.02 100);
+  --card-foreground: oklch(0.15 0.02 100);
   --popover: oklch(0.985 0.005 100);
-  --popover-foreground: oklch(0.2 0.02 100);
-  --secondary: oklch(0.85 0.1 95);
-  --secondary-foreground: oklch(0.2 0.02 100);
-  --muted: oklch(0.92 0.01 100);
-  --muted-foreground: oklch(0.45 0.02 100);
-  --accent: oklch(0.85 0.1 95);
-  --accent-foreground: oklch(0.2 0.02 100);
-  --border: oklch(0.2 0.02 100);
-  --input: oklch(0.2 0.02 100);
-  --ring: oklch(0.42 0.12 250);
+  --popover-foreground: oklch(0.15 0.02 100);
+  --secondary: oklch(0.82 0.16 145);
+  --secondary-foreground: oklch(0.18 0.04 145);
+  --muted: oklch(0.94 0.01 100);
+  --muted-foreground: oklch(0.35 0.02 100);
+  --accent: oklch(0.82 0.16 145);
+  --accent-foreground: oklch(0.18 0.04 145);
+  --border: oklch(0.15 0.02 100);
+  --input: oklch(0.15 0.02 100);
+  --ring: oklch(0.45 0.13 145);
 }
 
 @layer utilities {
