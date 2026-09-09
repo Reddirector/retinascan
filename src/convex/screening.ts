@@ -49,8 +49,8 @@ async function generateAiExplanation(
     `Model confidence: ${confidence}%. ` +
     "Explain this result and the recommended follow-up.";
 
-  try {
-    const res = await fetch(`${NVIDIA_BASE_URL}/chat/completions`, {
+  const call = async (): Promise<Response> => {
+    return fetch(`${NVIDIA_BASE_URL}/chat/completions`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -71,6 +71,16 @@ async function generateAiExplanation(
         chat_template_kwargs: { enable_thinking: false },
       }),
     });
+  };
+
+  try {
+    // The endpoint occasionally returns transient 503s under load — one
+    // retry after a short backoff; latency is hidden under the animation.
+    let res = await call();
+    if (res.status === 503 || res.status === 429) {
+      await new Promise((r) => setTimeout(r, 2000));
+      res = await call();
+    }
     if (!res.ok) {
       console.error("[screening] NVIDIA API error:", res.status);
       return null;
