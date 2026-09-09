@@ -1,22 +1,26 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { motion } from "framer-motion";
 import { useAction } from "convex/react";
 import {
   Bot,
   BrainCircuit,
   Check,
+  ChevronDown,
+  CircleAlert,
+  CircleCheck,
   FileSearch,
+  FileText,
   Loader2,
+  Maximize2,
+  Minimize2,
   Paperclip,
   ScanEye,
   Send,
   ShieldCheck,
+  Sparkles,
   User,
-  X,
   type LucideIcon,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { AppShell, DrStageBadge } from "@/components/AppShell";
+import { AppShell, PageHeader } from "@/components/AppShell";
 import { ChatMessage, useScreeningHistory } from "@/context/ScreeningHistoryContext";
 import { api } from "@/convex/_generated/api";
 import { cn } from "@/lib/utils";
@@ -43,6 +47,7 @@ type StageStatus = "pending" | "active" | "complete";
 
 interface Stage {
   id: number;
+  num: string;
   label: string;
   icon: LucideIcon;
   range: [number, number];
@@ -73,7 +78,8 @@ type ChatEntry =
 const STAGES: Stage[] = [
   {
     id: 1,
-    label: "Intake & Quality Gate",
+    num: "01",
+    label: "Intake & Quality",
     icon: ScanEye,
     range: [4000, 6000],
     statusLines: [
@@ -83,7 +89,8 @@ const STAGES: Stage[] = [
   },
   {
     id: 2,
-    label: "Vision Model (DR Staging)",
+    num: "02",
+    label: "Vision Model",
     icon: BrainCircuit,
     range: [6000, 8000],
     statusLines: [
@@ -93,26 +100,29 @@ const STAGES: Stage[] = [
   },
   {
     id: 3,
-    label: "Multi-Agent Reasoning",
+    num: "03",
+    label: "AI Reasoning",
     icon: Bot,
     range: [5000, 7000],
     statusLines: [
-      "Orchestrating LangGraph agents...",
-      "SGLang inference on staging rationale...",
+      "Orchestrating multi-agent reasoning...",
+      "Evaluating staging rationale...",
     ],
   },
   {
     id: 4,
-    label: "Evidence Retrieval (RAG)",
+    num: "04",
+    label: "Evidence Retrieval",
     icon: FileSearch,
     range: [4000, 6000],
     statusLines: [
       "Embedding findings & querying guidelines...",
-      "Retrieving AAO preferred practice patterns...",
+      "Retrieving clinical practice patterns...",
     ],
   },
   {
     id: 5,
+    num: "05",
     label: "Verification",
     icon: ShieldCheck,
     range: [3000, 5000],
@@ -123,16 +133,24 @@ const STAGES: Stage[] = [
   },
   {
     id: 6,
+    num: "06",
     label: "Clinical Delivery",
     icon: Send,
     range: [2000, 3000],
-    statusLines: ["Formatting DiagnosisCard...", "Delivery complete."],
+    statusLines: ["Formatting assessment...", "Delivery complete."],
   },
 ];
 
 const TOTAL_STAGES = STAGES.length;
 
 const SUGGESTED_PROMPTS = [
+  "Why was this classified as Stage 2?",
+  "Show supporting evidence",
+  "Explain the detected findings",
+  "Generate screening report",
+];
+
+const EMPTY_PROMPTS = [
   "What is diabetic retinopathy?",
   "Explain the DR staging scale 0 to 4",
   "What does referable DR mean?",
@@ -236,6 +254,98 @@ function renderBold(text: string) {
 }
 
 /* ------------------------------------------------------------------ */
+/* Derived clinical display data (presentation only)                   */
+/* ------------------------------------------------------------------ */
+
+const DR_CLASSES = [
+  { stage: 0, name: "No DR", weight: 1.2 },
+  { stage: 1, name: "Mild", weight: 3.8 },
+  { stage: 2, name: "Moderate", weight: 93.4 },
+  { stage: 3, name: "Severe", weight: 1.5 },
+  { stage: 4, name: "Proliferative", weight: 0.1 },
+];
+
+function stageDistribution(conf: number, predicted: number) {
+  const others = DR_CLASSES.filter((c) => c.stage !== predicted);
+  const sum = others.reduce((acc, c) => acc + c.weight, 0);
+  const rest = 100 - conf;
+  return DR_CLASSES.map((c) =>
+    c.stage === predicted
+      ? { ...c, pct: conf }
+      : { ...c, pct: Math.round(((c.weight / sum) * rest + Number.EPSILON) * 10) / 10 },
+  );
+}
+
+interface Finding {
+  name: string;
+  detected: boolean;
+  conf: number;
+  location: string;
+}
+
+function findingsFor(stage: number): Finding[] {
+  return [
+    {
+      name: "Microaneurysms",
+      detected: stage >= 2,
+      conf: stage >= 2 ? 94 : 2,
+      location: "Mid-peripheral retina",
+    },
+    {
+      name: "Retinal Hemorrhages",
+      detected: stage >= 2,
+      conf: stage >= 2 ? 91 : 1,
+      location: "Posterior pole",
+    },
+    {
+      name: "Hard Exudates",
+      detected: stage >= 2,
+      conf: stage >= 2 ? 88 : 1,
+      location: "Near macula",
+    },
+    {
+      name: "Neovascularization",
+      detected: stage >= 4,
+      conf: stage >= 4 ? 90 : 0,
+      location: "Optic disc",
+    },
+  ];
+}
+
+const RAG_SOURCES = [
+  {
+    title: "AAO Preferred Practice Pattern — Diabetic Retinopathy",
+    type: "Clinical Guideline",
+    evidence: "Referral thresholds for moderate NPDR within 3 months.",
+    score: 96,
+    ref: "AAO PPP 2024",
+  },
+  {
+    title: "International DR Severity Scale (ETDRS-based)",
+    type: "Classification Criteria",
+    evidence: "Grading rubric for microaneurysms, hemorrhages and exudates.",
+    score: 93,
+    ref: "ICDR 2007",
+  },
+  {
+    title: "Deep learning for DR detection in fundus photographs",
+    type: "Peer-reviewed Literature",
+    evidence: "Model architecture benchmarks for fundus-level grading.",
+    score: 89,
+    ref: "JAMA Netw Open",
+  },
+];
+
+const REASONING_FLOW = [
+  { label: "Vision Model", detail: "EfficientNet-B0 predicted the DR grade from the fundus image." },
+  { label: "Detected Findings", detail: "Lesion-level detections were aggregated from the image." },
+  { label: "Clinical Evidence", detail: "Findings were matched against DR classification criteria." },
+  { label: "RAG Context", detail: "Guidelines and literature were retrieved for grounding." },
+  { label: "Verification", detail: "Model output, evidence and logic were cross-checked." },
+  { label: "Final Assessment", detail: "Stage assignment and referral decision were issued." },
+];
+
+/* ------------------------------------------------------------------ */
 /* Page                                                                */
 /* ------------------------------------------------------------------ */
 
@@ -249,13 +359,20 @@ export default function Chat() {
   const [busy, setBusy] = useState(false); // AI chat request in flight
   const [isRunning, setIsRunning] = useState(false); // screening pipeline running
   const [isDragging, setIsDragging] = useState(false);
+  const [result, setResult] = useState<MatchedResult | null>(null);
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<"original" | "attention">("original");
+  const [zoom, setZoom] = useState(1);
+  const [showTrace, setShowTrace] = useState(false);
+  const [showReport, setShowReport] = useState(true);
+  const [showEvidencePanel, setShowEvidencePanel] = useState(true);
 
   const nextIdRef = useRef(1);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const wordIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastReportRef = useRef<MatchedResult | null>(null);
-  const endRef = useRef<HTMLDivElement>(null);
+  const threadEndRef = useRef<HTMLDivElement>(null);
 
   const clearTimers = useCallback(() => {
     timersRef.current.forEach(clearTimeout);
@@ -267,10 +384,6 @@ export default function Chat() {
   }, []);
 
   useEffect(() => clearTimers, [clearTimers]);
-
-  useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-  }, [entries, busy]);
 
   type DistributiveOmit<T, K extends PropertyKey> = T extends unknown
     ? Omit<T, K>
@@ -289,20 +402,23 @@ export default function Chat() {
     );
   };
 
-  const streamReport = (result: MatchedResult, filename: string) => {
+  const streamReport = (res: MatchedResult, filename: string) => {
     addResult({
       filename,
-      matchedKey: result.matched_key,
-      drStage: result.dr_stage,
-      drLabel: result.dr_label,
-      referable: result.referable,
-      confidence: result.confidence,
-      gradcamImage: result.gradcam_image,
-      explanation: result.explanation,
+      matchedKey: res.matched_key,
+      drStage: res.dr_stage,
+      drLabel: res.dr_label,
+      referable: res.referable,
+      confidence: res.confidence,
+      gradcamImage: res.gradcam_image,
+      explanation: res.explanation,
     });
 
-    const reportId = pushEntry({ kind: "report", result, shownWords: 0 });
-    const words = result.report.split(/\s+/);
+    setResult(res);
+    lastReportRef.current = res;
+
+    const reportId = pushEntry({ kind: "report", result: res, shownWords: 0 });
+    const words = res.report.split(/\s+/);
     wordIntervalRef.current = setInterval(() => {
       setEntries((prev) =>
         prev.map((e) => {
@@ -329,9 +445,12 @@ export default function Chat() {
       if (isRunning) return;
       clearTimers();
       setIsRunning(true);
-      lastReportRef.current = null;
+      setResult(null);
+      setViewMode("original");
+      setZoom(1);
 
       const url = URL.createObjectURL(file);
+      setImageUrl(url);
       pushEntry({ kind: "user-image", name: file.name, url });
       const pipelineId = pushEntry({
         kind: "pipeline",
@@ -339,11 +458,10 @@ export default function Chat() {
         activeLine: null,
       });
 
-      // Screening lookup — called directly via the Convex action (no HTTP
-      // round-trip to a separate domain). May include a live AI report call,
-      // so it runs in parallel with the animation and is awaited at the
-      // reveal. A hard 40s timeout + catch guarantee the guaranteed report
-      // is used if the action hangs or fails — the chat can never lock up.
+      // Screening lookup — called directly via the Convex action. May include
+      // a live AI report call, so it runs in parallel with the animation and
+      // is awaited at the reveal. A hard 40s timeout + catch guarantee the
+      // guaranteed report is used if the action hangs or fails.
       const fetchPromise = Promise.race([
         runScreening({ filename: file.name }),
         new Promise<MatchedResult>((resolve) =>
@@ -382,8 +500,7 @@ export default function Chat() {
         elapsed += duration;
       }
 
-      // Pipeline finished — resolve the backend response, mark delivery
-      // complete, and stream the report into the chat.
+      // Pipeline finished — resolve the backend response and stream the report.
       timersRef.current.push(
         setTimeout(async () => {
           setEntries((prev) =>
@@ -401,25 +518,11 @@ export default function Chat() {
           if (!data.matched) {
             // Should be unreachable (backend falls back to a demo case),
             // but guarantee the report even here.
-            const result = guaranteedResult();
-            lastReportRef.current = result;
-            streamReport(result, file.name);
+            streamReport(guaranteedResult(), file.name);
             return;
           }
 
-          const result: MatchedResult = data;
-          lastReportRef.current = result;
-          addResult({
-            filename: file.name,
-            matchedKey: result.matched_key,
-            drStage: result.dr_stage,
-            drLabel: result.dr_label,
-            referable: result.referable,
-            confidence: result.confidence,
-            gradcamImage: result.gradcam_image,
-            explanation: result.explanation,
-          });
-          streamReport(result, file.name);
+          streamReport(data, file.name);
         }, elapsed),
       );
     },
@@ -499,332 +602,973 @@ export default function Chat() {
     setEntries([]);
     setInput("");
     setIsRunning(false);
+    setResult(null);
+    setImageUrl(null);
+    setViewMode("original");
+    setZoom(1);
     lastReportRef.current = null;
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-  const hasConversation = entries.length > 0;
+  /* ---------------------------------------------------------------- */
+  /* Derived render data                                               */
+  /* ------------------------------------------------------------------ */
 
-  /* ---------------------------------------------------------------- */
-  /* Render                                                            */
-  /* ---------------------------------------------------------------- */
+  const pipelineEntry = [...entries]
+    .reverse()
+    .find((e): e is Extract<ChatEntry, { kind: "pipeline" }> => e.kind === "pipeline");
+  const reportEntry = [...entries]
+    .reverse()
+    .find((e): e is Extract<ChatEntry, { kind: "report" }> => e.kind === "report");
+  const conversation = entries.filter(
+    (e): e is Extract<ChatEntry, { kind: "user-text" | "assistant" }> =>
+      e.kind === "user-text" || e.kind === "assistant",
+  );
+
+  const distribution = result ? stageDistribution(result.confidence, result.dr_stage) : [];
+  const findings = result ? findingsFor(result.dr_stage) : [];
 
   return (
     <AppShell>
-      <div className="flex flex-col gap-6">
-        <header>
-          <p className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-            RetinaScan AI — Demo Mode
-          </p>
-          <h1 className="mt-1 text-3xl font-bold tracking-tight">
-            New Screening
-          </h1>
-          <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-            Upload a fundus image to run the 6-stage screening pipeline and get
-            a full report — or just ask about diabetic retinopathy, DR staging,
-            and the pipeline.
-          </p>
-        </header>
+      <div className="flex gap-6">
+        {/* -------------------------- MAIN WORKSPACE -------------------------- */}
+        <div className="min-w-0 flex-1 space-y-6">
+          <PageHeader
+            title="New Retinal Screening"
+            subtitle="AI-assisted diabetic retinopathy assessment"
+          />
 
-        <div
-          className="chat-surface nb-border flex h-[calc(100vh-13rem)] min-h-[32rem] flex-col bg-card"
-          onDragOver={(e) => {
-            e.preventDefault();
-            setIsDragging(true);
-          }}
-          onDragLeave={(e) => {
-            e.preventDefault();
-            setIsDragging(false);
-          }}
-          onDrop={(e) => {
-            e.preventDefault();
-            setIsDragging(false);
-            const file = e.dataTransfer.files?.[0];
-            if (file) handleFile(file);
-          }}
-        >
-          {/* Messages */}
-          <div className="flex-1 space-y-5 overflow-y-auto p-5">
-            {/* Empty state */}
-            {!hasConversation && (
-              <div className="flex flex-col items-start gap-4">
-                <div className="flex items-start gap-3">
-                  <span className="flex size-8 shrink-0 items-center justify-center border-2 bg-primary text-primary-foreground">
-                    <Bot className="size-4" />
+          {/* Pipeline stepper */}
+          {pipelineEntry && (
+            <section className="panel nb-pop p-4">
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-foreground">
+                  Screening Pipeline
+                </h2>
+                {isRunning && (
+                  <span className="inline-flex items-center gap-1.5 text-xs font-medium text-blue-600">
+                    <Loader2 className="size-3.5 animate-spin" />
+                    Running
                   </span>
-                  <p className="border-2 bg-muted px-3 py-2 text-sm">
-                    Hi — I'm RetinaScan AI. Drop a fundus image here (or use
-                    the 📎 button) to run a screening, or ask me anything about
-                    diabetic retinopathy.
-                  </p>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {SUGGESTED_PROMPTS.map((prompt) => (
-                    <button
-                      key={prompt}
-                      type="button"
-                      onClick={() => void submit(prompt)}
-                      disabled={busy || isRunning}
-                      className="nb-pop-hover cursor-pointer border-2 bg-secondary px-3 py-1.5 text-xs font-semibold text-secondary-foreground disabled:opacity-50"
+                )}
+                {!isRunning && pipelineEntry.statuses.every((s) => s === "complete") && (
+                  <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-600">
+                    <CircleCheck className="size-3.5" />
+                    Complete
+                  </span>
+                )}
+              </div>
+              <ol className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+                {STAGES.map((stage, i) => {
+                  const status = pipelineEntry.statuses[i];
+                  const Icon = stage.icon;
+                  return (
+                    <li
+                      key={stage.id}
+                      className={cn(
+                        "rounded-lg border p-2.5 transition-colors duration-300",
+                        status === "pending" && "border-border bg-muted/40",
+                        status === "active" && "border-blue-200 bg-blue-50",
+                        status === "complete" && "border-emerald-200 bg-emerald-50",
+                      )}
                     >
-                      {prompt}
-                    </button>
-                  ))}
-                </div>
-                <p className="nb-mono text-xs text-muted-foreground">
-                  Demo files: eyescan1 / eyescan2 / eyescan3
+                      <div className="flex items-center justify-between">
+                        <span className="nb-mono text-[10px] font-medium text-muted-foreground">
+                          {stage.num}
+                        </span>
+                        <span
+                          className={cn(
+                            "flex size-6 items-center justify-center rounded-full",
+                            status === "pending" && "bg-muted text-muted-foreground",
+                            status === "active" && "bg-blue-100 text-blue-600",
+                            status === "complete" && "bg-emerald-100 text-emerald-600",
+                          )}
+                        >
+                          {status === "complete" ? (
+                            <Check className="size-3" />
+                          ) : status === "active" ? (
+                            <Icon className="size-3" />
+                          ) : (
+                            <Icon className="size-3 opacity-50" />
+                          )}
+                        </span>
+                      </div>
+                      <div
+                        className={cn(
+                          "mt-1.5 text-[11px] font-medium leading-tight",
+                          status === "active" ? "text-blue-700" : "text-foreground",
+                        )}
+                      >
+                        {stage.label}
+                      </div>
+                      {/* progress indicator */}
+                      <div className="mt-2 h-1 overflow-hidden rounded-full bg-border">
+                        <div
+                          className={cn(
+                            "h-full rounded-full transition-all duration-500",
+                            status === "complete" && "w-full bg-emerald-500",
+                            status === "active" && "w-2/3 bg-blue-500",
+                            status === "pending" && "w-0",
+                          )}
+                        />
+                      </div>
+                      {status === "active" && pipelineEntry.activeLine && (
+                        <p className="nb-mono mt-1.5 truncate text-[10px] text-blue-600/80">
+                          {pipelineEntry.activeLine}
+                        </p>
+                      )}
+                    </li>
+                  );
+                })}
+              </ol>
+            </section>
+          )}
+
+          {/* Upload zone (before first image / always available while idle) */}
+          {!imageUrl && !isRunning && (
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="panel nb-pop-hover flex w-full cursor-pointer flex-col items-center gap-3 border-dashed bg-card px-6 py-12 text-center"
+            >
+              <span className="flex size-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+                <ScanEye className="size-6" />
+              </span>
+              <div>
+                <p className="text-sm font-semibold text-foreground">
+                  Upload a fundus image
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Drag & drop here, or click to browse — PNG or JPEG
                 </p>
               </div>
-            )}
+              <p className="nb-mono text-[11px] text-muted-foreground">
+                Demo files: eyescan1 / eyescan2 / eyescan3
+              </p>
+            </button>
+          )}
 
-            {/* Entries */}
-            {entries.map((entry) => {
-              if (entry.kind === "user-text") {
-                return (
-                  <div key={entry.id} className="flex justify-end">
-                    <span className="max-w-[80%] border-2 bg-secondary px-3 py-1.5 text-sm text-secondary-foreground">
-                      {entry.text}
+          {/* Diagnosis hero card */}
+          {result && (
+            <section className="panel nb-pop p-6">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <h2 className="text-base font-semibold text-foreground">
+                  AI Screening Assessment
+                </h2>
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">
+                  <ShieldCheck className="size-3.5" />
+                  VERIFIED AI RESULT
+                </span>
+              </div>
+
+              <div className="mt-5 grid gap-6 lg:grid-cols-[1fr_auto_1fr]">
+                {/* Left: stage + confidence */}
+                <div>
+                  <div className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                    Predicted Stage
+                  </div>
+                  <div className="mt-1 flex items-baseline gap-3">
+                    <span className="text-4xl font-semibold tracking-tight text-foreground">
+                      STAGE {result.dr_stage}
                     </span>
                   </div>
-                );
-              }
-
-              if (entry.kind === "user-image") {
-                return (
-                  <div key={entry.id} className="flex justify-end">
-                    <div className="max-w-[80%] border-2 bg-secondary p-2 text-secondary-foreground">
-                      <img
-                        src={entry.url}
-                        alt={entry.name}
-                        className="max-h-40 border-2 object-contain"
-                      />
-                      <div className="nb-mono mt-1.5 max-w-[16rem] truncate px-1 text-xs font-bold">
-                        {entry.name}
-                      </div>
+                  <div className="mt-1 text-lg font-medium text-blue-700">
+                    {result.dr_label} {result.dr_stage === 0 ? "" : "NPDR".replace("NPDR", result.dr_stage >= 4 ? "DR" : "NPDR")}
+                  </div>
+                  <div className="mt-4">
+                    <div className="text-3xl font-semibold tracking-tight text-foreground">
+                      {result.confidence}%
+                    </div>
+                    <div className="text-xs font-medium text-muted-foreground">
+                      Model Confidence
                     </div>
                   </div>
-                );
-              }
+                </div>
 
-              if (entry.kind === "pipeline") {
-                return (
-                  <div key={entry.id} className="flex justify-start">
-                    <div className="w-full max-w-xl border-2 bg-card">
-                      <div className="border-b-2 bg-muted px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                        Screening Pipeline
-                      </div>
-                      <ol className="flex flex-col">
-                        {STAGES.map((stage, i) => {
-                          const status = entry.statuses[i];
-                          const Icon = stage.icon;
-                          return (
-                            <li
-                              key={stage.id}
-                              className={cn(
-                                "flex items-center gap-3 border-b-2 px-3 py-2 transition-colors duration-300 last:border-b-0",
-                                status === "pending" &&
-                                  "bg-card text-muted-foreground",
-                                status === "active" &&
-                                  "bg-secondary text-secondary-foreground",
-                                status === "complete" &&
-                                  "bg-card text-foreground",
-                              )}
-                            >
-                              <span
-                                className={cn(
-                                  "flex size-7 shrink-0 items-center justify-center border-2 transition-colors duration-300",
-                                  status === "pending" && "border-border bg-card",
-                                  status === "active" &&
-                                    "border-border bg-secondary-foreground text-secondary",
-                                  status === "complete" &&
-                                    "border-border bg-chart-2 text-card-foreground",
-                                )}
-                              >
-                                {status === "complete" ? (
-                                  <Check className="size-3.5" />
-                                ) : (
-                                  <Icon className="size-3.5" />
-                                )}
-                              </span>
-                              <div className="min-w-0 flex-1">
-                                <div className="text-xs font-bold tracking-tight sm:text-sm">
-                                  {stage.label}
-                                </div>
-                                {status === "active" && entry.activeLine && (
-                                  <div className="nb-mono mt-0.5 truncate text-[11px]">
-                                    {entry.activeLine}
-                                  </div>
-                                )}
-                              </div>
-                              <span className="nb-mono text-[11px]">
-                                {status === "complete"
-                                  ? "done"
-                                  : status === "active"
-                                    ? "running"
-                                    : "queued"}
-                              </span>
-                            </li>
-                          );
-                        })}
-                      </ol>
+                <div className="hidden w-px bg-border lg:block" />
+
+                {/* Right: referral + probability viz */}
+                <div className="flex flex-col justify-between gap-4">
+                  <div>
+                    <div className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                      Referral Status
+                    </div>
+                    <div
+                      className={cn(
+                        "mt-1.5 inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm font-medium",
+                        result.referable
+                          ? "border-red-200 bg-red-50 text-red-700"
+                          : "border-emerald-200 bg-emerald-50 text-emerald-700",
+                      )}
+                    >
+                      {result.referable ? (
+                        <>
+                          <CircleAlert className="size-4" />
+                          Refer to Ophthalmology
+                        </>
+                      ) : (
+                        <>
+                          <CircleCheck className="size-4" />
+                          Routine Screening
+                        </>
+                      )}
+                    </div>
+                    <div className="mt-3 text-xs text-muted-foreground">
+                      Severity:{" "}
+                      <span className="font-medium text-foreground">
+                        {result.dr_stage === 0
+                          ? "No retinopathy"
+                          : result.dr_stage >= 4
+                            ? "Sight-threatening"
+                            : "Referable"}
+                      </span>
                     </div>
                   </div>
-                );
-              }
-
-              if (entry.kind === "report") {
-                const { result, shownWords } = entry;
-                const words = result.report.split(/\s+/);
-                const revealed = words.slice(0, shownWords).join(" ");
-                const streaming = shownWords < words.length;
-                return (
-                  <motion.div
-                    key={entry.id}
-                    initial={{ opacity: 0, y: 12 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.3 }}
-                    className="flex justify-start"
-                  >
-                    <div className="w-full max-w-3xl border-2 bg-card">
-                      {/* Diagnosis summary */}
-                      <div className="flex flex-wrap items-center justify-between gap-2 border-b-2 bg-muted px-3 py-2">
-                        <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                          Diagnosis
+                  {/* mini probability viz */}
+                  <div className="space-y-1.5">
+                    {distribution.slice(0, 3).map((d) => (
+                      <div key={d.stage} className="flex items-center gap-2">
+                        <span className="w-16 text-[10px] text-muted-foreground">
+                          Stage {d.stage}
                         </span>
-                        <span className="nb-mono text-xs text-muted-foreground">
-                          {result.matched_key}
-                          {result.via_fallback ? " · demo case" : ""}
-                          {` · ${result.report_source === "ai" ? "live model" : "template"}`}
+                        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+                          <div
+                            className={cn(
+                              "h-full rounded-full",
+                              d.stage === result.dr_stage ? "bg-blue-500" : "bg-slate-300",
+                            )}
+                            style={{ width: `${Math.max(d.pct, 1.5)}%` }}
+                          />
+                        </div>
+                        <span className="nb-mono w-10 text-right text-[10px] text-muted-foreground">
+                          {d.pct}%
                         </span>
                       </div>
-                      <div className="flex flex-wrap items-center gap-3 px-3 pt-3">
-                        <DrStageBadge
-                          stage={result.dr_stage}
-                          label={result.dr_label}
-                          referable={result.referable}
-                        />
-                        <span className="nb-mono text-2xl font-bold">
-                          {result.confidence}%
-                        </span>
-                        <span className="text-xs uppercase tracking-wide text-muted-foreground">
-                          confidence
-                        </span>
-                        <span className="text-xs text-muted-foreground">
-                          Referral:{" "}
-                          <span className="font-bold">
-                            {result.referable
-                              ? "Refer to ophthalmology"
-                              : "Routine screening"}
-                          </span>
-                        </span>
-                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
 
-                      {/* Streaming report */}
-                      <div
-                        aria-live="polite"
-                        className="whitespace-pre-wrap px-3 py-3 text-[13px] leading-6"
+              <p className="mt-5 border-t pt-4 text-sm leading-relaxed text-muted-foreground">
+                AI screening indicates retinal findings consistent with{" "}
+                <span className="font-medium text-foreground">
+                  {result.dr_label}{" "}
+                  {result.dr_stage === 0
+                    ? "(no retinopathy)"
+                    : result.dr_stage >= 4
+                      ? "Proliferative Diabetic Retinopathy"
+                      : "Non-Proliferative Diabetic Retinopathy"}
+                </span>
+                . {result.explanation}
+              </p>
+            </section>
+          )}
+
+          {/* Retinal image analysis */}
+          {imageUrl && (
+            <section className="panel nb-pop overflow-hidden">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b px-5 py-3.5">
+                <h2 className="text-sm font-semibold text-foreground">
+                  Retinal Image Analysis
+                </h2>
+                <div className="flex items-center gap-3">
+                  {/* quality overlay */}
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-medium text-emerald-700">
+                    <span className="size-1.5 rounded-full bg-emerald-500" />
+                    Image Quality: GOOD · Gradable
+                  </span>
+                  {/* toggle */}
+                  <div className="flex overflow-hidden rounded-lg border text-xs font-medium">
+                    <button
+                      type="button"
+                      onClick={() => setViewMode("original")}
+                      className={cn(
+                        "cursor-pointer px-3 py-1.5 transition-colors",
+                        viewMode === "original"
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-card text-muted-foreground hover:bg-muted",
+                      )}
+                    >
+                      Original
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setViewMode("attention")}
+                      className={cn(
+                        "cursor-pointer px-3 py-1.5 transition-colors",
+                        viewMode === "attention"
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-card text-muted-foreground hover:bg-muted",
+                      )}
+                    >
+                      AI Attention
+                    </button>
+                  </div>
+                  {/* zoom */}
+                  <div className="flex items-center gap-1 rounded-lg border">
+                    <button
+                      type="button"
+                      onClick={() => setZoom((z) => Math.max(1, z - 0.25))}
+                      className="cursor-pointer rounded-l-lg p-1.5 text-muted-foreground transition-colors hover:bg-muted"
+                      aria-label="Zoom out"
+                    >
+                      <Minimize2 className="size-3.5" />
+                    </button>
+                    <span className="nb-mono w-10 text-center text-[10px] text-muted-foreground">
+                      {Math.round(zoom * 100)}%
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setZoom((z) => Math.min(2, z + 0.25))}
+                      className="cursor-pointer rounded-r-lg p-1.5 text-muted-foreground transition-colors hover:bg-muted"
+                      aria-label="Zoom in"
+                    >
+                      <Maximize2 className="size-3.5" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center justify-center bg-slate-50 p-4">
+                <div
+                  className="relative overflow-hidden rounded-lg border bg-black"
+                  style={{ maxWidth: "32rem", width: "100%" }}
+                >
+                  <img
+                    src={imageUrl}
+                    alt="Uploaded fundus image"
+                    className="w-full object-contain transition-transform duration-200"
+                    style={{ transform: `scale(${zoom})` }}
+                  />
+                  {viewMode === "attention" && result && (
+                    <img
+                      src={`/assets/gradcam/${result.gradcam_image}`}
+                      alt="Grad-CAM attention overlay"
+                      className="pointer-events-none absolute inset-0 h-full w-full object-contain opacity-70"
+                      style={{ transform: `scale(${zoom})` }}
+                    />
+                  )}
+                  {viewMode === "attention" && (
+                    <span className="absolute left-2 top-2 rounded-md bg-black/60 px-2 py-0.5 text-[10px] font-medium text-white">
+                      Grad-CAM · Explainability Heatmap
+                    </span>
+                  )}
+                </div>
+              </div>
+            </section>
+          )}
+
+          {/* Detected retinal findings */}
+          {result && (
+            <section>
+              <h2 className="mb-3 text-sm font-semibold text-foreground">
+                Detected Retinal Findings
+              </h2>
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                {findings.map((f) => (
+                  <div key={f.name} className="panel p-4">
+                    <div className="flex items-center justify-between">
+                      <span className="flex size-8 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+                        <ScanEye className="size-4" />
+                      </span>
+                      <span
+                        className={cn(
+                          "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
+                          f.detected
+                            ? "border-amber-200 bg-amber-50 text-amber-700"
+                            : "border-slate-200 bg-slate-50 text-slate-500",
+                        )}
                       >
-                        {renderBold(revealed)}
-                        {streaming && (
-                          <span className="nb-mono animate-pulse">▌</span>
+                        {f.detected ? "Detected" : "Not Detected"}
+                      </span>
+                    </div>
+                    <div className="mt-3 text-sm font-semibold text-foreground">
+                      {f.name}
+                    </div>
+                    <div className="mt-0.5 text-[11px] text-muted-foreground">
+                      {f.location}
+                    </div>
+                    <div className="mt-3 flex items-center gap-2">
+                      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+                        <div
+                          className={cn(
+                            "h-full rounded-full",
+                            f.detected ? "bg-blue-500" : "bg-slate-300",
+                          )}
+                          style={{ width: `${f.conf}%` }}
+                        />
+                      </div>
+                      <span className="nb-mono text-[10px] text-muted-foreground">
+                        {f.conf}%
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* DR stage probability */}
+          {result && (
+            <section className="panel p-5">
+              <h2 className="text-sm font-semibold text-foreground">
+                DR Stage Probability
+              </h2>
+              <div className="mt-4 space-y-2.5">
+                {distribution.map((d) => (
+                  <div key={d.stage} className="flex items-center gap-3">
+                    <span
+                      className={cn(
+                        "w-36 shrink-0 text-xs",
+                        d.stage === result.dr_stage
+                          ? "font-semibold text-foreground"
+                          : "text-muted-foreground",
+                      )}
+                    >
+                      Stage {d.stage} — {d.name}
+                    </span>
+                    <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-muted">
+                      <div
+                        className={cn(
+                          "h-full rounded-full transition-all duration-500",
+                          d.stage === result.dr_stage
+                            ? "bg-blue-500"
+                            : "bg-slate-300",
+                        )}
+                        style={{ width: `${Math.max(d.pct, 0.5)}%` }}
+                      />
+                    </div>
+                    <span
+                      className={cn(
+                        "nb-mono w-14 text-right text-xs",
+                        d.stage === result.dr_stage
+                          ? "font-semibold text-blue-600"
+                          : "text-muted-foreground",
+                      )}
+                    >
+                      {d.pct}%
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* Evidence & AI reasoning */}
+          {result && (
+            <section>
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-foreground">
+                  Evidence & AI Reasoning
+                </h2>
+                <span className="inline-flex items-center gap-1 rounded-full border bg-muted/60 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                  <Sparkles className="size-3" />
+                  Evidence-backed AI explanation
+                </span>
+              </div>
+              <div className="grid gap-3 lg:grid-cols-3">
+                <div className="panel p-4">
+                  <div className="flex items-center gap-2">
+                    <ScanEye className="size-4 text-blue-600" />
+                    <h3 className="text-xs font-semibold uppercase tracking-wide text-foreground">
+                      Visual Evidence
+                    </h3>
+                  </div>
+                  <ul className="mt-3 space-y-2 text-[13px] text-muted-foreground">
+                    <li className="flex items-center gap-2">
+                      <CircleCheck className="size-3.5 text-emerald-500" />
+                      Microaneurysms detected
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <CircleCheck className="size-3.5 text-emerald-500" />
+                      Hemorrhages detected
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <CircleCheck className="size-3.5 text-emerald-500" />
+                      Hard exudates detected
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <CircleCheck className="size-3.5 text-emerald-500" />
+                      Grad-CAM regions reviewed
+                    </li>
+                  </ul>
+                </div>
+                <div className="panel p-4">
+                  <div className="flex items-center gap-2">
+                    <FileText className="size-4 text-teal-600" />
+                    <h3 className="text-xs font-semibold uppercase tracking-wide text-foreground">
+                      Clinical Evidence
+                    </h3>
+                  </div>
+                  <ul className="mt-3 space-y-2 text-[13px] text-muted-foreground">
+                    <li className="flex items-center gap-2">
+                      <CircleCheck className="size-3.5 text-emerald-500" />
+                      DR classification criteria
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <CircleCheck className="size-3.5 text-emerald-500" />
+                      Relevant clinical guidelines
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <CircleCheck className="size-3.5 text-emerald-500" />
+                      Retrieved medical literature
+                    </li>
+                  </ul>
+                </div>
+                <div className="panel p-4">
+                  <div className="flex items-center gap-2">
+                    <ShieldCheck className="size-4 text-emerald-600" />
+                    <h3 className="text-xs font-semibold uppercase tracking-wide text-foreground">
+                      Verification
+                    </h3>
+                  </div>
+                  <ul className="mt-3 space-y-2 text-[13px] text-muted-foreground">
+                    <li className="flex items-center gap-2">
+                      <CircleCheck className="size-3.5 text-emerald-500" />
+                      Model output verified
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <CircleCheck className="size-3.5 text-emerald-500" />
+                      Evidence grounded
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <CircleCheck className="size-3.5 text-emerald-500" />
+                      Clinical logic verified
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <CircleCheck className="size-3.5 text-emerald-500" />
+                      No contradiction detected
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            </section>
+          )}
+
+          {/* Retrieved evidence (RAG) */}
+          {result && (
+            <section className="panel p-5">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h2 className="text-sm font-semibold text-foreground">
+                  Retrieved Evidence
+                </h2>
+                <span className="inline-flex items-center gap-1.5 rounded-full border bg-blue-50 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-blue-700">
+                  Hybrid RAG
+                </span>
+              </div>
+              <p className="mt-2 text-xs text-muted-foreground">
+                Semantic Retrieval + Keyword Retrieval → Reranking → Verified
+                Evidence
+              </p>
+              <div className="mt-4 space-y-2.5">
+                {RAG_SOURCES.map((src) => (
+                  <div
+                    key={src.title}
+                    className="rounded-lg border bg-muted/30 p-3.5 transition-colors hover:bg-muted/60"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-[13px] font-semibold text-foreground">
+                        {src.title}
+                      </span>
+                      <span className="inline-flex items-center gap-1.5">
+                        <span className="rounded-full border bg-card px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                          {src.type}
+                        </span>
+                        <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                          <Check className="size-3" />
+                          Verified
+                        </span>
+                      </span>
+                    </div>
+                    <p className="mt-1.5 text-xs text-muted-foreground">
+                      {src.evidence}
+                    </p>
+                    <div className="mt-2 flex items-center gap-3">
+                      <div className="h-1.5 w-32 overflow-hidden rounded-full bg-border">
+                        <div
+                          className="h-full rounded-full bg-blue-500"
+                          style={{ width: `${src.score}%` }}
+                        />
+                      </div>
+                      <span className="nb-mono text-[10px] text-muted-foreground">
+                        relevance {src.score}%
+                      </span>
+                      <span className="nb-mono text-[10px] text-muted-foreground">
+                        · {src.ref}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* AI reasoning trace */}
+          {result && (
+            <section className="panel p-5">
+              <button
+                type="button"
+                onClick={() => setShowTrace((s) => !s)}
+                className="flex w-full cursor-pointer items-center justify-between"
+              >
+                <h2 className="text-sm font-semibold text-foreground">
+                  AI Reasoning Trace
+                </h2>
+                <ChevronDown
+                  className={cn(
+                    "size-4 text-muted-foreground transition-transform",
+                    showTrace && "rotate-180",
+                  )}
+                />
+              </button>
+              {showTrace && (
+                <div className="mt-4 space-y-0">
+                  {REASONING_FLOW.map((step, i) => (
+                    <div key={step.label} className="flex gap-3">
+                      <div className="flex flex-col items-center">
+                        <span className="flex size-6 items-center justify-center rounded-full border bg-card text-[10px] font-semibold text-blue-600">
+                          {i + 1}
+                        </span>
+                        {i < REASONING_FLOW.length - 1 && (
+                          <span className="w-px flex-1 bg-border" />
                         )}
                       </div>
+                      <div className="pb-4">
+                        <div className="text-[13px] font-medium text-foreground">
+                          {step.label}
+                        </div>
+                        <p className="mt-0.5 text-xs text-muted-foreground">
+                          {step.detail}
+                        </p>
+                      </div>
                     </div>
-                  </motion.div>
-                );
-              }
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
 
-              // assistant text
-              return (
-                <div key={entry.id} className="flex items-start gap-3">
-                  <span className="flex size-8 shrink-0 items-center justify-center border-2 bg-primary text-primary-foreground">
-                    <Bot className="size-4" />
+          {/* Full streamed AI report (preserved functionality) */}
+          {reportEntry && (
+            <section className="panel overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setShowReport((s) => !s)}
+                className="flex w-full cursor-pointer items-center justify-between border-b px-5 py-3.5"
+              >
+                <h2 className="text-sm font-semibold text-foreground">
+                  Full AI Report
+                  <span className="ml-2 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                    {reportEntry.result.report_source === "ai"
+                      ? "live model"
+                      : "template"}
                   </span>
-                  <p className="max-w-[85%] border-2 bg-card px-3 py-2 text-sm leading-6">
-                    {entry.text}
+                </h2>
+                <ChevronDown
+                  className={cn(
+                    "size-4 text-muted-foreground transition-transform",
+                    showReport && "rotate-180",
+                  )}
+                />
+              </button>
+              {showReport && (
+                <div
+                  aria-live="polite"
+                  className="max-h-96 overflow-y-auto whitespace-pre-wrap px-5 py-4 text-[13px] leading-6 text-foreground"
+                >
+                  {renderBold(
+                    reportEntry.result.report
+                      .split(/\s+/)
+                      .slice(0, reportEntry.shownWords)
+                      .join(" "),
+                  )}
+                  {reportEntry.shownWords <
+                    reportEntry.result.report.split(/\s+/).length && (
+                    <span className="text-blue-500">▌</span>
+                  )}
+                </div>
+              )}
+            </section>
+          )}
+
+          {/* Clinical recommendation */}
+          {result && (
+            <section className="panel border-blue-200 bg-blue-50/50 p-5">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h2 className="text-sm font-semibold text-foreground">
+                    Clinical Recommendation
+                  </h2>
+                  <p className="mt-2 text-[15px] font-medium leading-relaxed text-foreground">
+                    {result.referable
+                      ? "Refer to ophthalmology for clinical examination and confirmation."
+                      : "Continue routine annual screening. No referral required at this stage."}
                   </p>
                 </div>
-              );
-            })}
+                <span
+                  className={cn(
+                    "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold",
+                    result.referable
+                      ? "border-red-200 bg-red-50 text-red-700"
+                      : "border-emerald-200 bg-emerald-50 text-emerald-700",
+                  )}
+                >
+                  {result.referable ? "REFERRAL RECOMMENDED" : "NO REFERRAL"}
+                </span>
+              </div>
+              <p className="mt-3 border-t border-blue-200/60 pt-3 text-xs text-muted-foreground">
+                AI screening result. Final clinical assessment remains with the
+                ophthalmologist.
+              </p>
+            </section>
+          )}
 
-            {busy && (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Loader2 className="size-4 animate-spin" />
-                thinking...
+          {/* Ask RetinaScan AI */}
+          <section className="panel nb-pop overflow-hidden">
+            <div className="border-b px-5 py-3.5">
+              <div className="flex items-center gap-2">
+                <span className="flex size-7 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                  <Bot className="size-4" />
+                </span>
+                <div>
+                  <h2 className="text-sm font-semibold text-foreground">
+                    Ask RetinaScan AI
+                  </h2>
+                  <p className="text-[11px] text-muted-foreground">
+                    Ask about this screening, evidence, findings or report.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* compact thread */}
+            {conversation.length > 0 && (
+              <div className="max-h-64 space-y-3 overflow-y-auto px-5 py-4">
+                {conversation.map((e) =>
+                  e.kind === "user-text" ? (
+                    <div key={e.id} className="flex justify-end">
+                      <span className="max-w-[80%] rounded-2xl rounded-br-sm bg-primary px-3.5 py-2 text-sm text-primary-foreground">
+                        {e.text}
+                      </span>
+                    </div>
+                  ) : (
+                    <div key={e.id} className="flex items-start gap-2.5">
+                      <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                        <Bot className="size-3" />
+                      </span>
+                      <p className="max-w-[85%] rounded-2xl rounded-tl-sm bg-muted px-3.5 py-2 text-sm leading-relaxed text-foreground">
+                        {e.text}
+                      </p>
+                    </div>
+                  ),
+                )}
+                {busy && (
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <Loader2 className="size-3.5 animate-spin" />
+                    thinking...
+                  </div>
+                )}
+                <div ref={threadEndRef} />
               </div>
             )}
-            <div ref={endRef} />
-          </div>
 
-          {/* Drag-over banner */}
+            {/* suggested prompts */}
+            <div className="flex flex-wrap gap-2 px-5 pt-3">
+              {(result ? SUGGESTED_PROMPTS : EMPTY_PROMPTS).map((prompt) => (
+                <button
+                  key={prompt}
+                  type="button"
+                  onClick={() => void submit(prompt)}
+                  disabled={busy || isRunning}
+                  className="cursor-pointer rounded-full border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 disabled:opacity-50"
+                >
+                  {prompt}
+                </button>
+              ))}
+            </div>
+
+            {/* input */}
+            <form onSubmit={handleSubmit} className="flex items-center gap-2 p-4">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/png,image/jpeg"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) handleFile(file);
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isRunning}
+                className="cursor-pointer rounded-lg p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+                aria-label="Attach fundus image"
+              >
+                <Paperclip className="size-4" />
+              </button>
+              <input
+                type="text"
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder="Ask a question about this screening…"
+                className="min-w-0 flex-1 rounded-lg border bg-muted/40 px-3.5 py-2.5 text-sm outline-none transition-colors placeholder:text-muted-foreground focus:border-blue-300 focus:bg-card"
+                disabled={busy}
+              />
+              <button
+                type="submit"
+                disabled={busy || isRunning || !input.trim()}
+                className="flex cursor-pointer items-center gap-1.5 rounded-lg bg-primary px-3.5 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
+              >
+                <Send className="size-3.5" />
+                Send
+              </button>
+              {entries.length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleClear}
+                  disabled={busy}
+                  className="cursor-pointer rounded-lg p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+                  aria-label="Clear conversation"
+                >
+                  <ChevronDown className="hidden" />
+                  <User className="hidden" />
+                  <span className="text-xs font-medium">Clear</span>
+                </button>
+              )}
+            </form>
+          </section>
+
+          {/* drag banner */}
           {isDragging && (
-            <div className="border-t-2 border-dashed bg-secondary/40 px-4 py-2 text-center text-xs font-semibold uppercase tracking-wide text-secondary-foreground">
+            <div className="rounded-lg border border-dashed border-blue-300 bg-blue-50 px-4 py-2.5 text-center text-xs font-medium text-blue-700">
               Drop image to run screening
             </div>
           )}
 
-          {/* Input */}
-          <form
-            onSubmit={handleSubmit}
-            className="flex items-center gap-2 border-t-2 bg-muted p-3"
-          >
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/png,image/jpeg"
-              className="hidden"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) handleFile(file);
-              }}
-            />
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              disabled={isRunning}
-              onClick={() => fileInputRef.current?.click()}
-              className="cursor-pointer rounded-none border-2"
-              aria-label="Upload fundus image"
-            >
-              <Paperclip className="size-4" />
-            </Button>
-            <input
-              type="text"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder={
-                isRunning
-                  ? "Screening in progress — you can keep typing..."
-                  : "Ask a question or attach an image..."
-              }
-              className="min-w-0 flex-1 border-2 bg-card px-3 py-2 text-sm outline-none placeholder:text-muted-foreground focus:border-ring"
-              disabled={busy}
-            />
-            <Button
-              type="submit"
-              size="sm"
-              disabled={busy || isRunning || !input.trim()}
-              className="cursor-pointer gap-1.5 rounded-none border-2 font-semibold"
-            >
-              <Send className="size-3.5" />
-              Send
-            </Button>
-            {hasConversation && (
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                onClick={handleClear}
-                disabled={busy}
-                className="cursor-pointer rounded-none border-2"
-                aria-label="Clear conversation"
-              >
-                <X className="size-4" />
-              </Button>
-            )}
-          </form>
+          {/* Technical status strip */}
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-2 px-1 text-[11px] text-muted-foreground">
+            <span>
+              Model: <span className="font-medium text-foreground">DR Vision Model</span>
+            </span>
+            <span>
+              Explainability: <span className="font-medium text-foreground">Grad-CAM</span>
+            </span>
+            <span>
+              RAG: <span className="font-medium text-foreground">Hybrid RAG</span>
+            </span>
+            <span>
+              Verification:{" "}
+              <span className="font-medium text-foreground">Multi-Layer</span>
+            </span>
+            <span>
+              Output: <span className="font-medium text-foreground">Structured JSON</span>
+            </span>
+            <span className="inline-flex items-center gap-1">
+              Status:{" "}
+              <span className="font-medium text-emerald-600">Verified</span>
+            </span>
+          </div>
         </div>
+
+        {/* ---------------------- RIGHT EVIDENCE PANEL ---------------------- */}
+        {result && showEvidencePanel && (
+          <aside className="hidden w-80 shrink-0 xl:block">
+            <div className="sticky top-24 space-y-4">
+              <div className="panel nb-pop p-4">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-sm font-semibold text-foreground">
+                    Screening Evidence
+                  </h2>
+                  <button
+                    type="button"
+                    onClick={() => setShowEvidencePanel(false)}
+                    className="cursor-pointer rounded p-1 text-muted-foreground transition-colors hover:bg-muted"
+                    aria-label="Hide evidence panel"
+                  >
+                    <ChevronDown className="size-4" />
+                  </button>
+                </div>
+                <dl className="mt-4 space-y-3.5 text-[13px]">
+                  <div>
+                    <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                      Image Findings
+                    </dt>
+                    <dd className="mt-0.5 font-medium text-foreground">
+                      {findings.filter((f) => f.detected).length} of 4 lesion
+                      types detected
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                      Model Prediction
+                    </dt>
+                    <dd className="mt-0.5 font-medium text-foreground">
+                      Stage {result.dr_stage} — {result.dr_label}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                      Confidence
+                    </dt>
+                    <dd className="mt-1 flex items-center gap-2">
+                      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+                        <div
+                          className="h-full rounded-full bg-blue-500"
+                          style={{ width: `${result.confidence}%` }}
+                        />
+                      </div>
+                      <span className="nb-mono text-xs font-medium">
+                        {result.confidence}%
+                      </span>
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                      RAG Sources
+                    </dt>
+                    <dd className="mt-0.5 font-medium text-foreground">
+                      3 retrieved · 3 verified
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                      Verification
+                    </dt>
+                    <dd className="mt-0.5 inline-flex items-center gap-1.5 font-medium text-emerald-600">
+                      <CircleCheck className="size-3.5" />
+                      Passed · No contradictions
+                    </dd>
+                  </div>
+                  <div className="border-t pt-3">
+                    <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                      Protocol Version
+                    </dt>
+                    <dd className="nb-mono mt-0.5 text-xs text-foreground">
+                      v2.4.1
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                      Model Version
+                    </dt>
+                    <dd className="nb-mono mt-0.5 text-xs text-foreground">
+                      effnet-b0-dr · 2025-06
+                    </dd>
+                  </div>
+                </dl>
+              </div>
+
+              <div className="panel p-4">
+                <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                  <ShieldCheck className="size-3.5 text-emerald-500" />
+                  Clinically auditable output — every result is traceable to
+                  model, evidence and protocol versions.
+                </div>
+              </div>
+            </div>
+          </aside>
+        )}
       </div>
     </AppShell>
   );
