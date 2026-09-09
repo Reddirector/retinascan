@@ -23,7 +23,7 @@ interface CaseRecord {
 }
 
 const NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1";
-const NVIDIA_MODEL = "nvidia/nemotron-3-ultra-550b-a55b";
+const NVIDIA_MODEL = "nvidia/nemotron-3.5-lightning-30b-a3b";
 
 /**
  * Generate a clinical explanation via the NVIDIA NIM chat completions API
