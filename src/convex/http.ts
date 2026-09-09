@@ -1,6 +1,6 @@
 import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
-import { internal } from "./_generated/api";
+import { api } from "./_generated/api";
 import { auth } from "./auth";
 
 const http = httpRouter();
@@ -41,7 +41,7 @@ http.route({
         );
       }
 
-      const result = await ctx.runAction(internal.screening.screen, {
+      const result = await ctx.runAction(api.screening.screen, {
         filename,
       });
 

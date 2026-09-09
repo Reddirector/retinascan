@@ -441,7 +441,7 @@ export const chat = action({
 /* Screening action                                                    */
 /* ------------------------------------------------------------------ */
 
-export const screen = internalAction({
+export const screen = action({
   args: { filename: v.string() },
   handler: async (_ctx, { filename }) => {
     // Filename convention: strip extension, trim, lowercase.
