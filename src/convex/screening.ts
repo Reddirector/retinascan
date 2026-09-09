@@ -324,11 +324,11 @@ async function generateAiReport(
 export const chat = action({
   args: {
     question: v.string(),
-    report: v.string(),
-    dr_stage: v.number(),
-    dr_label: v.string(),
-    referable: v.boolean(),
-    confidence: v.number(),
+    report: v.optional(v.string()),
+    dr_stage: v.optional(v.number()),
+    dr_label: v.optional(v.string()),
+    referable: v.optional(v.boolean()),
+    confidence: v.optional(v.number()),
     history: v.array(
       v.object({
         role: v.union(v.literal("user"), v.literal("assistant")),
@@ -340,28 +340,42 @@ export const chat = action({
     const apiKey = process.env.NVIDIA_API_KEY;
     if (!apiKey) {
       // Deterministic fallback when no key is configured.
-      const action = referable
-        ? "Ophthalmologist referral is recommended."
-        : "Routine annual screening is recommended.";
+      if (report) {
+        const action = referable
+          ? "Ophthalmologist referral is recommended."
+          : "Routine annual screening is recommended.";
+        return {
+          reply:
+            `Based on the screening report: DR stage ${dr_stage} (${dr_label}) ` +
+            `with ${confidence}% confidence. ${action} ` +
+            "(Configure NVIDIA_API_KEY to enable live AI answers.)",
+          source: "template" as const,
+        };
+      }
       return {
         reply:
-          `Based on the screening report: DR stage ${dr_stage} (${dr_label}) ` +
-          `with ${confidence}% confidence. ${action} ` +
-          "(Configure NVIDIA_API_KEY to enable live AI answers.)",
+          "RetinaScan AI's chat assistant needs NVIDIA_API_KEY configured to answer questions. " +
+          "Run a screening from New Screening first — the report itself works without the key.",
         source: "template" as const,
       };
     }
 
-    const systemPrompt =
-      "You are RetinaScan AI's clinical follow-up assistant. Answer questions about " +
-      "the screening report provided. Be concise (1-3 sentences unless asked for detail), "
-      "factual, and grounded in the report facts. You are an AI screening tool, not a "
-      "definitive clinical diagnosis. Plain prose only, no markdown headings.";
+    const systemPrompt = report
+      ? "You are RetinaScan AI's clinical follow-up assistant. Answer questions about " +
+        "the screening report provided. Be concise (1-3 sentences unless asked for detail), " +
+        "factual, and grounded in the report facts. You are an AI screening tool, not a " +
+        "definitive clinical diagnosis. Plain prose only, no markdown headings."
+      : "You are RetinaScan AI's assistant — a demo tool for AI-based diabetic retinopathy " +
+        "screening from fundus images. Answer general questions about diabetic retinopathy, " +
+        "DR staging (0-4), screening workflows, and the RetinaScan pipeline. Be concise and " +
+        "factual. You are an AI screening tool, not a definitive clinical diagnosis. " +
+        "Plain prose only, no markdown headings.";
 
-    const userPrompt =
-      `Screening report for context:\n\n${report}\n\n` +
-      `Case facts: DR stage ${dr_stage} (${dr_label}), referable: ${referable}, confidence: ${confidence}%.\n\n` +
-      `The user asks: ${question}`;
+    const userPrompt = report
+      ? `Screening report for context:\n\n${report}\n\n` +
+        `Case facts: DR stage ${dr_stage} (${dr_label}), referable: ${referable}, confidence: ${confidence}%.\n\n` +
+        `The user asks: ${question}`
+      : `The user asks: ${question}`;
 
     const call = async (): Promise<Response> => {
       return fetch(`${NVIDIA_BASE_URL}/chat/completions`, {

@@ -1,7 +1,14 @@
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
 import { useScreeningHistory } from "@/context/ScreeningHistoryContext";
-import { History, LayoutDashboard, LogOut, ScanEye, type LucideIcon } from "lucide-react";
+import {
+  History,
+  LayoutDashboard,
+  LogOut,
+  MessageSquare,
+  ScanEye,
+  type LucideIcon,
+} from "lucide-react";
 import { useNavigate } from "react-router";
 import { cn } from "@/lib/utils";
 
@@ -13,6 +20,7 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { label: "New Screening", icon: ScanEye, to: "/new-screening" },
+  { label: "AI Chat", icon: MessageSquare, to: "/chat" },
   { label: "History", icon: History, to: "/dashboard" },
 ];
 
@@ -128,6 +136,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             aria-label="New Screening"
           >
             <ScanEye className="size-4" />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={() => navigate("/chat")}
+            className="cursor-pointer rounded-none border-2"
+            aria-label="AI Chat"
+          >
+            <MessageSquare className="size-4" />
           </Button>
           <Button
             type="button"

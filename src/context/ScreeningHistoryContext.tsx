@@ -1,5 +1,10 @@
 import { createContext, useContext, useMemo, useState } from "react";
 
+export interface ChatMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
 export interface ScreeningResult {
   id: number;
   filename: string;
