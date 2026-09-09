@@ -1,0 +1,23 @@
+{
+  "eyescan1": {
+    "dr_stage": 0,
+    "dr_label": "No DR",
+    "referable": false,
+    "gradcam_image": "gradcam_eyescan1.png",
+    "explanation": "No signs of diabetic retinopathy detected. Routine annual screening is recommended."
+  },
+  "eyescan2": {
+    "dr_stage": 2,
+    "dr_label": "Moderate",
+    "referable": true,
+    "gradcam_image": "gradcam_eyescan2.png",
+    "explanation": "Microaneurysms and scattered hemorrhages consistent with moderate non-proliferative diabetic retinopathy. Referral to an ophthalmologist is recommended within 3 months."
+  },
+  "eyescan3": {
+    "dr_stage": 4,
+    "dr_label": "Proliferative",
+    "referable": true,
+    "gradcam_image": "gradcam_eyescan3.png",
+    "explanation": "Extensive hemorrhages and signs of neovascularization consistent with proliferative diabetic retinopathy. Urgent ophthalmology referral recommended."
+  }
+}
