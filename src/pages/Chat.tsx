@@ -17,7 +17,6 @@ import {
   Send,
   ShieldCheck,
   Sparkles,
-  User,
   type LucideIcon,
 } from "lucide-react";
 import { AppShell, PageHeader } from "@/components/AppShell";
@@ -397,6 +396,7 @@ export default function Chat() {
   const wordIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastReportRef = useRef<MatchedResult | null>(null);
   const threadEndRef = useRef<HTMLDivElement>(null);
+  const dragDepthRef = useRef(0);
 
   const clearTimers = useCallback(() => {
     timersRef.current.forEach(clearTimeout);
@@ -626,6 +626,35 @@ export default function Chat() {
     await submit(input);
   };
 
+  /* ---------------------------------------------------------------- */
+  /* Drag & drop                                                       */
+  /* ---------------------------------------------------------------- */
+
+  const handleDragEnter = (e: React.DragEvent) => {
+    if (!e.dataTransfer.types.includes("Files")) return;
+    e.preventDefault();
+    dragDepthRef.current += 1;
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+    if (dragDepthRef.current === 0) setIsDragging(false);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    dragDepthRef.current = 0;
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file && file.type.startsWith("image/")) handleFile(file);
+  };
+
   const handleClear = () => {
     clearTimers();
     setEntries([]);
@@ -659,7 +688,13 @@ export default function Chat() {
 
   return (
     <AppShell>
-      <div className="flex gap-6">
+      <div
+        className="flex gap-6"
+        onDragEnter={handleDragEnter}
+        onDragLeave={handleDragLeave}
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
+      >
         {/* -------------------------- MAIN WORKSPACE -------------------------- */}
         <div className="min-w-0 flex-1 space-y-6">
           <PageHeader
@@ -686,6 +721,19 @@ export default function Chat() {
                     Complete
                   </span>
                 )}
+              </div>
+              {/* overall progress */}
+              <div className="mb-3 h-1 overflow-hidden rounded-full bg-border">
+                <div
+                  className="h-full rounded-full bg-blue-500 transition-all duration-700 ease-out"
+                  style={{
+                    width: `${
+                      (pipelineEntry.statuses.filter((s) => s === "complete").length /
+                        TOTAL_STAGES) *
+                      100
+                    }%`,
+                  }}
+                />
               </div>
               <ol className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
                 {STAGES.map((stage, i) => {
@@ -716,7 +764,7 @@ export default function Chat() {
                           {status === "complete" ? (
                             <Check className="size-3" />
                           ) : status === "active" ? (
-                            <Icon className="size-3" />
+                            <Icon className="size-3 animate-pulse" />
                           ) : (
                             <Icon className="size-3 opacity-50" />
                           )}
@@ -754,11 +802,10 @@ export default function Chat() {
           )}
 
           {/* Upload zone (before first image / always available while idle) */}
-          {!imageUrl && !isRunning && (
-            <button
+          {!imageUrl && !isRunning && (            <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="panel nb-pop-hover flex w-full cursor-pointer flex-col items-center gap-3 border-dashed bg-card px-6 py-12 text-center"
+              className="panel nb-pop-hover flex w-full cursor-pointer flex-col items-center gap-3 border-dashed bg-card px-6 py-12 text-center transition-colors hover:border-blue-300 hover:bg-blue-50/40"
             >
               <span className="flex size-12 items-center justify-center rounded-full bg-primary/10 text-primary">
                 <ScanEye className="size-6" />
@@ -768,13 +815,31 @@ export default function Chat() {
                   Upload a fundus image
                 </p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Drag & drop here, or click to browse — PNG or JPEG
+                  Drag & drop anywhere on the page, or click to browse — PNG or JPEG
                 </p>
               </div>
-              <p className="nb-mono text-[11px] text-muted-foreground">
-                Demo files: eyescan1 / eyescan2 / eyescan3
-              </p>
+              <span className="inline-flex items-center gap-1.5 rounded-full border bg-muted/60 px-3 py-1 text-[11px] font-medium text-muted-foreground">
+                <Sparkles className="size-3 text-blue-500" />
+                Demo files: eyescan1 · eyescan2 · eyescan3
+              </span>
             </button>
+          )}
+
+          {/* Drag overlay */}
+          {isDragging && (
+            <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center bg-blue-50/70 backdrop-blur-[2px]">
+              <div className="rounded-xl border-2 border-dashed border-blue-300 bg-white px-8 py-6 text-center shadow-lg">
+                <span className="mx-auto flex size-10 items-center justify-center rounded-full bg-blue-50 text-blue-500">
+                  <ScanEye className="size-5" />
+                </span>
+                <p className="mt-3 text-sm font-semibold text-blue-700">
+                  Drop fundus image to run screening
+                </p>
+                <p className="mt-0.5 text-xs text-blue-600/70">
+                  eyescan1 · eyescan2 · eyescan3
+                </p>
+              </div>
+            </div>
           )}
 
           {/* Diagnosis hero card */}
@@ -1244,9 +1309,9 @@ export default function Chat() {
                 onClick={() => setShowTrace((s) => !s)}
                 className="flex w-full cursor-pointer items-center justify-between"
               >
-                <h2 className="text-sm font-semibold text-foreground">
+                <span className="text-sm font-semibold text-foreground">
                   AI Reasoning Trace
-                </h2>
+                </span>
                 <ChevronDown
                   className={cn(
                     "size-4 text-muted-foreground transition-transform",
@@ -1385,11 +1450,11 @@ export default function Chat() {
 
             {/* compact thread */}
             {conversation.length > 0 && (
-              <div className="max-h-64 space-y-3 overflow-y-auto px-5 py-4">
+              <div className="max-h-80 space-y-3 overflow-y-auto px-5 py-4">
                 {conversation.map((e) =>
                   e.kind === "user-text" ? (
                     <div key={e.id} className="flex justify-end">
-                      <span className="max-w-[80%] rounded-2xl rounded-br-sm bg-primary px-3.5 py-2 text-sm text-primary-foreground">
+                      <span className="max-w-[80%] whitespace-pre-wrap break-words rounded-2xl rounded-br-sm bg-primary px-3.5 py-2 text-sm text-primary-foreground">
                         {e.text}
                       </span>
                     </div>
@@ -1482,34 +1547,25 @@ export default function Chat() {
             </form>
           </section>
 
-          {/* drag banner */}
-          {isDragging && (
-            <div className="rounded-lg border border-dashed border-blue-300 bg-blue-50 px-4 py-2.5 text-center text-xs font-medium text-blue-700">
-              Drop image to run screening
-            </div>
-          )}
-
           {/* Technical status strip */}
-          <div className="flex flex-wrap items-center gap-x-6 gap-y-2 px-1 text-[11px] text-muted-foreground">
-            <span>
-              Model: <span className="font-medium text-foreground">DR Vision Model</span>
-            </span>
-            <span>
-              Explainability: <span className="font-medium text-foreground">Grad-CAM</span>
-            </span>
-            <span>
-              RAG: <span className="font-medium text-foreground">Hybrid RAG</span>
-            </span>
-            <span>
-              Verification:{" "}
-              <span className="font-medium text-foreground">Multi-Layer</span>
-            </span>
-            <span>
-              Output: <span className="font-medium text-foreground">Structured JSON</span>
-            </span>
-            <span className="inline-flex items-center gap-1">
-              Status:{" "}
-              <span className="font-medium text-emerald-600">Verified</span>
+          <div className="flex flex-wrap items-center gap-2 px-1">
+            {[
+              ["Model", "DR Vision Model"],
+              ["Explainability", "Grad-CAM"],
+              ["RAG", "Hybrid"],
+              ["Verification", "Multi-Layer"],
+            ].map(([label, value]) => (
+              <span
+                key={label}
+                className="inline-flex items-center gap-1.5 rounded-full border bg-card px-2.5 py-1 text-[11px]"
+              >
+                <span className="text-muted-foreground">{label}</span>
+                <span className="font-semibold text-foreground">{value}</span>
+              </span>
+            ))}
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">
+              <span className="size-1.5 rounded-full bg-emerald-500" />
+              Verified
             </span>
           </div>
         </div>
