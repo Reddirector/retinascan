@@ -259,6 +259,15 @@
     background-position: 56px 56px;
   }
 }
+@keyframes rs-wave {
+  0%,
+  100% {
+    transform: translateX(-6%) skewX(-4deg) scaleY(1);
+  }
+  50% {
+    transform: translateX(6%) skewX(4deg) scaleY(1.12);
+  }
+}
 @keyframes rs-strike {
   from {
     stroke-dashoffset: 24;
@@ -325,5 +334,44 @@
   }
   .anim-fade-slow {
     animation: rs-fade-slow 0.7s ease-out both;
+  }
+  /* Extremely subtle flowing medical/AI wave layer behind the app shell.
+     Two blurred radial glows (blue + teal) drift slowly — never distracting. */
+  .bg-waves {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    overflow: hidden;
+  }
+  .bg-waves::before,
+  .bg-waves::after {
+    content: "";
+    position: absolute;
+    width: 60vw;
+    height: 40vh;
+    border-radius: 9999px;
+    filter: blur(72px);
+    opacity: 0.5;
+  }
+  .bg-waves::before {
+    top: -14vh;
+    left: -10vw;
+    background: radial-gradient(
+      closest-side,
+      oklch(0.62 0.09 250 / 0.16),
+      transparent
+    );
+    animation: rs-wave 26s ease-in-out infinite;
+  }
+  .bg-waves::after {
+    bottom: -16vh;
+    right: -12vw;
+    background: radial-gradient(
+      closest-side,
+      oklch(0.68 0.08 190 / 0.14),
+      transparent
+    );
+    animation: rs-wave 32s ease-in-out infinite reverse;
   }
 }

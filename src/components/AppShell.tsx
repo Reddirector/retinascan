@@ -9,9 +9,14 @@ import {
   Search,
   Settings,
   Users,
+  Bell,
+  ChevronRight,
+  CalendarClock,
+  CircleCheck,
+  UserRound,
   type LucideIcon,
 } from "lucide-react";
-import { useNavigate, useLocation } from "react-router";
+import { useNavigate, useLocation, Link } from "react-router";
 import {
   CommandDialog,
   CommandEmpty,
@@ -20,6 +25,24 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Kbd } from "@/components/ui/kbd";
+import {
+  Breadcrumb,
+  BreadcrumbItem as CrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -67,6 +90,232 @@ export function DrStageBadge({
   );
 }
 
+const CRUMB_LABELS: Record<string, string> = {
+  "/chat": "New Screening",
+  "/dashboard": "Screening History",
+  "/patients": "Patients",
+  "/reports": "Reports",
+  "/settings": "Settings",
+};
+
+/** Breadcrumb trail: Home / Current page. */
+export function PageBreadcrumbs() {
+  const location = useLocation();
+  const current = CRUMB_LABELS[location.pathname];
+  return (
+    <Breadcrumb>
+      <BreadcrumbList className="text-xs">
+        <CrumbItem>
+          <BreadcrumbLink asChild>
+            <Link to="/chat" className="transition-colors hover:text-blue-600">
+              Home
+            </Link>
+          </BreadcrumbLink>
+        </CrumbItem>
+        {current && (
+          <>
+            <BreadcrumbSeparator />
+            <CrumbItem>
+              <BreadcrumbPage className="font-medium">
+                {current}
+              </BreadcrumbPage>
+            </CrumbItem>
+          </>
+        )}
+      </BreadcrumbList>
+    </Breadcrumb>
+  );
+}
+
+/** Live clock — updates every 30s so the header shows current time. */
+function useNow() {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 30_000);
+    return () => clearInterval(t);
+  }, []);
+  return now;
+}
+
+const NOTIFICATIONS = [
+  {
+    id: "n1",
+    title: "Screening verified",
+    detail: "eyescan2 result verified · Stage 2, 94% confidence",
+    time: "2 min ago",
+    tone: "ok" as const,
+  },
+  {
+    id: "n2",
+    title: "Referral report ready",
+    detail: "Report RS-20260910-1042 requires clinician sign-off",
+    time: "18 min ago",
+    tone: "warn" as const,
+  },
+  {
+    id: "n3",
+    title: "Knowledge base synced",
+    detail: "ChromaDB re-indexed 96,412 vectors · 0 errors",
+    time: "1 h ago",
+    tone: "ok" as const,
+  },
+];
+
+/** Top header: global search (⌘K), AI status, live clock, notifications, profile. */
+export function TopHeader({ onOpenPalette }: { onOpenPalette: () => void }) {
+  const now = useNow();
+  const { user, signOut } = useAuth();
+  const navigate = useNavigate();
+
+  const handleSignOut = async () => {
+    await signOut();
+    navigate("/");
+  };
+
+  return (
+    <div className="sticky top-0 z-30 hidden border-b bg-sidebar/85 backdrop-blur-md md:block">
+      <div className="flex h-14 items-center gap-4 px-8">
+        {/* Global search trigger */}
+        <button
+          type="button"
+          onClick={onOpenPalette}
+          className="group flex h-9 w-72 max-w-full cursor-pointer items-center gap-2 rounded-lg border bg-muted/50 px-3 text-left text-xs text-muted-foreground transition-colors hover:border-blue-200 hover:bg-blue-50/50 hover:text-foreground"
+        >
+          <Search className="size-3.5 shrink-0" />
+          <span className="truncate">Search patients, case ID, or anything...</span>
+          <Kbd className="ml-auto shrink-0 border bg-card">⌘K</Kbd>
+        </button>
+
+        {/* AI system status */}
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50/80 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">
+          <span className="relative flex size-1.5">
+            <span className="absolute inline-flex size-full rounded-full bg-emerald-500 anim-ping-soft" />
+            <span className="relative inline-flex size-1.5 rounded-full bg-emerald-500" />
+          </span>
+          AI System Online
+        </span>
+
+        {/* Date & time */}
+        <span className="hidden items-center gap-1.5 text-xs text-muted-foreground lg:inline-flex">
+          <CalendarClock className="size-3.5" />
+          {now.toLocaleDateString(undefined, {
+            weekday: "short",
+            month: "short",
+            day: "numeric",
+          })}
+          {" · "}
+          {now.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}
+        </span>
+
+        <div className="ml-auto flex items-center gap-1.5">
+          {/* Notification center */}
+          <Popover>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                className="relative cursor-pointer rounded-lg p-2 text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground"
+                aria-label="Notifications"
+              >
+                <Bell className="size-4" />
+                <span className="absolute right-1.5 top-1.5 size-2 rounded-full border-2 border-sidebar bg-blue-500" />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-80 rounded-xl p-0">
+              <div className="border-b px-4 py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Notifications
+              </div>
+              <div className="max-h-72 overflow-y-auto">
+                {NOTIFICATIONS.map((n) => (
+                  <div
+                    key={n.id}
+                    className="flex gap-2.5 border-b px-4 py-3 transition-colors last:border-b-0 hover:bg-muted/50"
+                  >
+                    <span
+                      className={cn(
+                        "mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full",
+                        n.tone === "ok"
+                          ? "bg-emerald-50 text-emerald-600"
+                          : "bg-amber-50 text-amber-600",
+                      )}
+                    >
+                      {n.tone === "ok" ? (
+                        <CircleCheck className="size-3.5" />
+                      ) : (
+                        <Bell className="size-3.5" />
+                      )}
+                    </span>
+                    <div className="min-w-0">
+                      <div className="text-[13px] font-medium text-foreground">
+                        {n.title}
+                      </div>
+                      <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                        {n.detail}
+                      </p>
+                      <span className="mt-1 block text-[10px] text-muted-foreground">
+                        {n.time}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={() => toast.success("All notifications marked as read")}
+                className="w-full cursor-pointer border-t px-4 py-2.5 text-xs font-medium text-blue-600 transition-colors hover:bg-blue-50"
+              >
+                Mark all as read
+              </button>
+            </PopoverContent>
+          </Popover>
+
+          {/* User profile menu */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="flex cursor-pointer items-center gap-2 rounded-lg p-1.5 pr-2.5 outline-none transition-colors hover:bg-muted"
+                aria-label="User profile menu"
+              >
+                <span className="flex size-7 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
+                  {(user?.name ?? user?.email ?? "U").charAt(0).toUpperCase()}
+                </span>
+                <span className="hidden text-xs font-medium text-foreground lg:block">
+                  {user?.name ?? "Account"}
+                </span>
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56 rounded-xl">
+              <DropdownMenuLabel className="text-xs">
+                <div className="font-medium text-foreground">
+                  {user?.name ?? user?.email ?? "Signed in"}
+                </div>
+                <div className="text-[11px] font-normal text-muted-foreground">
+                  Ophthalmologist
+                </div>
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                className="cursor-pointer text-xs"
+                onClick={() => navigate("/settings")}
+              >
+                <UserRound className="size-3.5" />
+                Profile & settings
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className="cursor-pointer text-xs"
+                onClick={() => void handleSignOut()}
+              >
+                <LogOut className="size-3.5" />
+                Sign out
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function PageHeader({
   title,
   subtitle,
@@ -86,6 +335,9 @@ export function PageHeader({
   return (
     <header className="flex flex-wrap items-start justify-between gap-4">
       <div>
+        <div className="mb-1.5">
+          <PageBreadcrumbs />
+        </div>
         <h1 className="text-2xl font-semibold tracking-tight text-foreground">
           {title}
         </h1>
@@ -158,9 +410,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   );
 
   return (
-    <div className="flex min-h-screen bg-background text-foreground">
+    <div className="relative flex min-h-screen bg-background text-foreground">
+      {/* Ambient AI wave background (fixed, non-interactive) */}
+      <div className="bg-waves" aria-hidden />
+
       {/* Left sidebar */}
-      <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r bg-sidebar px-4 py-6 md:flex">
+      <aside className="sticky top-0 z-30 hidden h-screen w-64 shrink-0 flex-col border-r bg-sidebar px-4 py-6 md:flex">
         <button
           type="button"
           onClick={() => navigate("/")}
@@ -318,9 +573,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </div>
 
       {/* Main workspace */}
-      <main className="min-w-0 flex-1 px-4 pb-16 pt-20 md:px-8 md:py-8">
-        <div className="mx-auto w-full max-w-6xl">{children}</div>
-      </main>
+      <div className="min-w-0 flex-1">
+        <TopHeader onOpenPalette={() => setPaletteOpen(true)} />
+        <main className="relative z-10 min-w-0 px-4 pb-16 pt-20 md:px-8 md:pt-8">
+          <div className="mx-auto w-full max-w-6xl">{children}</div>
+        </main>
+      </div>
 
       {/* Global command palette (⌘K) */}
       <CommandDialog open={paletteOpen} onOpenChange={setPaletteOpen}>

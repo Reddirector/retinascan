@@ -12,6 +12,7 @@ import {
   Loader2,
   Maximize2,
   Minimize2,
+  MoveHorizontal,
   Paperclip,
   ScanEye,
   Send,
@@ -19,7 +20,7 @@ import {
   Sparkles,
   type LucideIcon,
 } from "lucide-react";
-import { AppShell, PageHeader } from "@/components/AppShell";
+import { AppShell, CaseHistoryTable, PageHeader } from "@/components/AppShell";
 import { RichText } from "@/components/RichText";
 import {
   AIProcessing,
@@ -386,7 +387,7 @@ function StructuredReportStreamed({
 export default function Chat() {
   const sendChat = useAction(api.screening.chat);
   const runScreening = useAction(api.screening.screen);
-  const { addResult } = useScreeningHistory();
+  const { addResult, history } = useScreeningHistory();
 
   const [entries, setEntries] = useState<ChatEntry[]>([]);
   const [input, setInput] = useState("");
@@ -395,8 +396,10 @@ export default function Chat() {
   const [isDragging, setIsDragging] = useState(false);
   const [result, setResult] = useState<MatchedResult | null>(null);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<"original" | "attention">("original");
+  const [viewMode, setViewMode] = useState<"original" | "attention" | "compare">("original");
   const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [comparePos, setComparePos] = useState(50);
   const [showTrace, setShowTrace] = useState(false);
   const [showReport, setShowReport] = useState(true);
   const [showEvidencePanel, setShowEvidencePanel] = useState(true);
@@ -408,6 +411,9 @@ export default function Chat() {
   const lastReportRef = useRef<MatchedResult | null>(null);
   const threadEndRef = useRef<HTMLDivElement>(null);
   const dragDepthRef = useRef(0);
+  const compareRef = useRef<HTMLDivElement>(null);
+  const compareDragRef = useRef(false);
+  const panRef = useRef<{ x: number; y: number } | null>(null);
 
   const clearTimers = useCallback(() => {
     timersRef.current.forEach(clearTimeout);
@@ -488,6 +494,8 @@ export default function Chat() {
       setResult(null);
       setViewMode("original");
       setZoom(1);
+      setPan({ x: 0, y: 0 });
+      setComparePos(50);
 
       const url = URL.createObjectURL(file);
       setImageUrl(url);
@@ -681,8 +689,23 @@ export default function Chat() {
     setImageUrl(null);
     setViewMode("original");
     setZoom(1);
+    setPan({ x: 0, y: 0 });
+    setComparePos(50);
     lastReportRef.current = null;
     if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  /* Drag-to-pan when zoomed in (compare mode uses its own divider drag). */
+  const startPan = (e: React.PointerEvent) => {
+    if (zoom <= 1 || viewMode === "compare") return;
+    panRef.current = { x: e.clientX - pan.x, y: e.clientY - pan.y };
+  };
+  const movePan = (e: React.PointerEvent) => {
+    if (!panRef.current) return;
+    setPan({ x: e.clientX - panRef.current.x, y: e.clientY - panRef.current.y });
+  };
+  const endPan = () => {
+    panRef.current = null;
   };
 
   /* ---------------------------------------------------------------- */
@@ -760,7 +783,10 @@ export default function Chat() {
                     <li
                       key={stage.id}
                       className={cn(
-                        "rounded-lg border p-2.5 transition-colors duration-300",
+                        "relative rounded-lg border p-2.5 transition-colors duration-300",
+                        // connector line to the next stage (single-row layout only)
+                        i < TOTAL_STAGES - 1 &&
+                          "after:absolute after:top-1/2 after:-right-2 after:hidden after:h-px after:w-2 after:bg-border after:content-[''] lg:after:block",
                         status === "pending" && "border-border bg-muted/40",
                         status === "active" && "border-blue-200 bg-blue-50",
                         status === "complete" && "border-emerald-200 bg-emerald-50",
@@ -903,12 +929,29 @@ export default function Chat() {
                         ? " DR"
                         : " NPDR"}
                   </div>
-                  <div className="mt-4">
-                    <div className="text-3xl font-semibold tracking-tight text-foreground">
-                      <CountUp value={result.confidence} suffix="%" duration={1100} />
+                  <div className="mt-4 flex items-end gap-6">
+                    <div>
+                      <div className="text-3xl font-semibold tracking-tight text-foreground">
+                        <CountUp value={result.confidence} suffix="%" duration={1100} />
+                      </div>
+                      <div className="text-xs font-medium text-muted-foreground">
+                        Model Confidence
+                      </div>
                     </div>
-                    <div className="text-xs font-medium text-muted-foreground">
-                      Model Confidence
+                    <div>
+                      <div className="text-3xl font-semibold tracking-tight text-slate-500">
+                        <CountUp
+                          value={Math.round((100 - result.confidence) * 10) / 10}
+                          decimals={1}
+                          suffix="%"
+                          duration={1100}
+                        />
+                      </div>
+                      <Tooltip label="Complement of model confidence — residual prediction uncertainty">
+                        <div className="w-fit cursor-help text-xs font-medium text-muted-foreground">
+                          Uncertainty ⓘ
+                        </div>
+                      </Tooltip>
                     </div>
                   </div>
                 </div>
@@ -1034,12 +1077,28 @@ export default function Chat() {
                     >
                       AI Attention
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => setViewMode("compare")}
+                      className={cn(
+                        "cursor-pointer px-3 py-1.5 transition-colors",
+                        viewMode === "compare"
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-card text-muted-foreground hover:bg-muted",
+                      )}
+                    >
+                      Compare
+                    </button>
                   </div>
                   {/* zoom */}
                   <div className="flex items-center gap-1 rounded-lg border">
                     <button
                       type="button"
-                      onClick={() => setZoom((z) => Math.max(1, z - 0.25))}
+                      onClick={() => {
+                        const next = Math.max(1, zoom - 0.25);
+                        setZoom(next);
+                        if (next === 1) setPan({ x: 0, y: 0 });
+                      }}
                       className="cursor-pointer rounded-l-lg p-1.5 text-muted-foreground transition-colors hover:bg-muted"
                       aria-label="Zoom out"
                     >
@@ -1061,26 +1120,83 @@ export default function Chat() {
               </div>
               <div className="flex items-center justify-center bg-slate-50 p-4">
                 <div
-                  className="relative overflow-hidden rounded-lg border bg-black"
-                  style={{ maxWidth: "32rem", width: "100%" }}
+                  ref={compareRef}
+                  className="relative aspect-[4/3] w-full max-w-[32rem] select-none overflow-hidden rounded-lg border bg-black"
                 >
+                  {/* Original image (base layer) */}
                   <img
                     src={imageUrl}
                     alt="Uploaded fundus image"
-                    className="w-full object-contain transition-transform duration-200"
-                    style={{ transform: `scale(${zoom})` }}
+                    className={cn(
+                      "absolute inset-0 h-full w-full object-contain transition-transform duration-150",
+                      zoom > 1 && viewMode !== "compare" && "cursor-grab active:cursor-grabbing",
+                    )}
+                    style={{ transform: `scale(${zoom}) translate(${pan.x}px, ${pan.y}px)` }}
+                    onPointerDown={startPan}
+                    onPointerMove={movePan}
+                    onPointerUp={endPan}
+                    onPointerLeave={endPan}
+                    draggable={false}
                   />
-                  {viewMode === "attention" && result && (
+                  {/* AI attention layer — full overlay or clipped by the compare divider */}
+                  {viewMode !== "original" && result && (
                     <img
                       src={`/assets/gradcam/${result.gradcam_image}`}
                       alt="Grad-CAM attention overlay"
                       className="pointer-events-none absolute inset-0 h-full w-full object-contain anim-fade-slow"
-                      style={{ transform: `scale(${zoom})`, opacity: 0.72 }}
+                      style={{
+                        transform: `scale(${zoom}) translate(${pan.x}px, ${pan.y}px)`,
+                        opacity: viewMode === "compare" ? 0.85 : 0.72,
+                        clipPath:
+                          viewMode === "compare" ? `inset(0 0 0 ${comparePos}%)` : undefined,
+                      }}
+                      draggable={false}
                     />
                   )}
                   {viewMode === "attention" && (
                     <span className="absolute left-2 top-2 rounded-md bg-black/60 px-2 py-0.5 text-[10px] font-medium text-white">
                       Grad-CAM · Explainability Heatmap
+                    </span>
+                  )}
+                  {viewMode === "compare" && (
+                    <>
+                      <div
+                        className="absolute inset-y-0 z-10 w-px bg-white/90"
+                        style={{ left: `${comparePos}%` }}
+                      />
+                      <button
+                        type="button"
+                        aria-label="Drag to compare original and AI attention views"
+                        className="absolute top-1/2 z-20 flex size-8 -translate-x-1/2 -translate-y-1/2 cursor-ew-resize items-center justify-center rounded-full border border-white/70 bg-white/90 text-slate-700 shadow-md transition-transform hover:scale-105"
+                        style={{ left: `${comparePos}%` }}
+                        onPointerDown={(e) => {
+                          e.currentTarget.setPointerCapture(e.pointerId);
+                          compareDragRef.current = true;
+                        }}
+                        onPointerMove={(e) => {
+                          if (!compareDragRef.current) return;
+                          const rect = compareRef.current?.getBoundingClientRect();
+                          if (!rect) return;
+                          const pct = ((e.clientX - rect.left) / rect.width) * 100;
+                          setComparePos(Math.min(94, Math.max(6, pct)));
+                        }}
+                        onPointerUp={() => {
+                          compareDragRef.current = false;
+                        }}
+                      >
+                        <MoveHorizontal className="size-4" />
+                      </button>
+                      <span className="absolute bottom-2 left-2 rounded-md bg-black/60 px-2 py-0.5 text-[10px] font-medium text-white">
+                        Original
+                      </span>
+                      <span className="absolute bottom-2 right-2 rounded-md bg-black/60 px-2 py-0.5 text-[10px] font-medium text-white">
+                        AI Attention
+                      </span>
+                    </>
+                  )}
+                  {zoom > 1 && viewMode !== "compare" && (
+                    <span className="absolute bottom-2 left-1/2 -translate-x-1/2 rounded-md bg-black/60 px-2 py-0.5 text-[10px] font-medium text-white">
+                      Drag to pan
                     </span>
                   )}
                 </div>
@@ -1369,6 +1485,17 @@ export default function Chat() {
               )}
             </section>
           )}
+
+          {/* Case history */}
+          <section className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-foreground">Case History</h2>
+              <span className="text-xs text-muted-foreground">
+                {history.length} recorded this session
+              </span>
+            </div>
+            <CaseHistoryTable />
+          </section>
 
           {/* Full streamed AI report (structured, preserved functionality) */}
           {reportEntry && (
