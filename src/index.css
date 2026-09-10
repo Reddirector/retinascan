@@ -140,4 +140,179 @@
     border: 1px solid var(--border);
     border-radius: var(--radius);
   }
+  /* Glassmorphism surface for hero cards, sidebar footer, command bar */
+  .glass {
+    background: color-mix(in oklab, white 72%, transparent);
+    backdrop-filter: blur(14px) saturate(1.4);
+    -webkit-backdrop-filter: blur(14px) saturate(1.4);
+    border: 1px solid rgb(255 255 255 / 0.55);
+  }
+  .glass-strong {
+    background: color-mix(in oklab, white 88%, transparent);
+    backdrop-filter: blur(18px) saturate(1.5);
+    -webkit-backdrop-filter: blur(18px) saturate(1.5);
+    border: 1px solid rgb(255 255 255 / 0.6);
+  }
+  /* Soft premium accent gradients */
+  .grad-accent {
+    background-image: linear-gradient(
+      135deg,
+      oklch(0.55 0.11 252 / 0.08),
+      oklch(0.62 0.11 185 / 0.08) 45%,
+      oklch(0.65 0.09 300 / 0.08)
+    );
+  }
+  .grad-hero {
+    background-image: linear-gradient(
+      120deg,
+      oklch(0.97 0.02 250),
+      oklch(0.97 0.025 185) 50%,
+      oklch(0.97 0.02 295)
+    );
+  }
+  .grad-text {
+    background-image: linear-gradient(
+      100deg,
+      oklch(0.5 0.12 252),
+      oklch(0.55 0.1 195) 55%,
+      oklch(0.5 0.1 300)
+    );
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+}
+
+/* ------------------- Premium keyframes & animation utilities ------------------ */
+@keyframes rs-verify-pop {
+  0% {
+    transform: scale(0.4);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.15);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+@keyframes rs-ping-soft {
+  0% {
+    transform: scale(1);
+    opacity: 0.7;
+  }
+  80%,
+  100% {
+    transform: scale(2.2);
+    opacity: 0;
+  }
+}
+@keyframes rs-shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+@keyframes rs-orbit {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes rs-breathe {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.06);
+  }
+}
+@keyframes rs-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes rs-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+@keyframes rs-grid-drift {
+  from {
+    background-position: 0 0;
+  }
+  to {
+    background-position: 56px 56px;
+  }
+}
+@keyframes rs-strike {
+  from {
+    stroke-dashoffset: 24;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@layer utilities {
+  .anim-verify {
+    animation: rs-verify-pop 0.35s cubic-bezier(0.2, 0.9, 0.3, 1.4) both;
+  }
+  .anim-ping-soft {
+    animation: rs-ping-soft 1.8s cubic-bezier(0, 0, 0.2, 1) infinite;
+  }
+  .anim-shimmer {
+    position: relative;
+    overflow: hidden;
+  }
+  .anim-shimmer::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background-image: linear-gradient(
+      90deg,
+      transparent,
+      rgb(255 255 255 / 0.55),
+      transparent
+    );
+    animation: rs-shimmer 1.8s infinite;
+  }
+  .anim-orbit {
+    animation: rs-orbit 1.4s linear infinite;
+  }
+  .anim-breathe {
+    animation: rs-breathe 3.2s ease-in-out infinite;
+  }
+  .anim-rise {
+    animation: rs-rise 0.4s ease-out both;
+  }
+  .anim-float {
+    animation: rs-float 7s ease-in-out infinite;
+  }
+  .bg-grid-soft {
+    background-image:
+      linear-gradient(to right, oklch(0.5 0.03 250 / 0.05) 1px, transparent 1px),
+      linear-gradient(to bottom, oklch(0.5 0.03 250 / 0.05) 1px, transparent 1px);
+    background-size: 56px 56px;
+    animation: rs-grid-drift 24s linear infinite;
+  }
+  .anim-strike {
+    stroke-dasharray: 24;
+    animation: rs-strike 0.4s ease-out 0.15s both;
+  }
 }
