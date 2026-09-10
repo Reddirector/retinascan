@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { AppShell, DrStageBadge, PageHeader } from "@/components/AppShell";
 import { useScreeningHistory } from "@/context/ScreeningHistoryContext";
 import { ArrowUpDown, Search, ScanEye } from "lucide-react";
+import { CountUp } from "@/components/premium";
 import { cn } from "@/lib/utils";
 
 type SortKey = "date" | "confidence" | "stage";
@@ -75,25 +76,25 @@ export default function Dashboard() {
 
         {/* Summary stats */}
         <div className="grid gap-4 sm:grid-cols-3">
-          <div className="panel nb-pop p-5">
+          <div className="panel nb-pop nb-pop-hover p-5">
             <div className="text-3xl font-semibold tracking-tight text-foreground">
-              {stats.total}
+              <CountUp value={stats.total} duration={700} />
             </div>
             <div className="mt-1 text-xs font-medium text-muted-foreground">
               Screenings this session
             </div>
           </div>
-          <div className="panel nb-pop p-5">
+          <div className="panel nb-pop nb-pop-hover p-5">
             <div className="text-3xl font-semibold tracking-tight text-red-600">
-              {stats.referrals}
+              <CountUp value={stats.referrals} duration={700} />
             </div>
             <div className="mt-1 text-xs font-medium text-muted-foreground">
               Referrals recommended
             </div>
           </div>
-          <div className="panel nb-pop p-5">
+          <div className="panel nb-pop nb-pop-hover p-5">
             <div className="text-3xl font-semibold tracking-tight text-foreground">
-              {stats.avgConfidence}%
+              <CountUp value={stats.avgConfidence} suffix="%" duration={700} />
             </div>
             <div className="mt-1 text-xs font-medium text-muted-foreground">
               Mean model confidence
@@ -188,10 +189,11 @@ export default function Dashboard() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((r) => (
+                  {filtered.map((r, i) => (
                     <tr
                       key={r.id}
-                      className="border-b transition-colors last:border-b-0 hover:bg-muted/40"
+                      className="anim-rise border-b transition-colors duration-200 last:border-b-0 hover:bg-muted/40"
+                      style={{ animationDelay: `${Math.min(i * 40, 320)}ms` }}
                     >
                       <td className="nb-mono px-4 py-3 text-xs text-muted-foreground">
                         {r.matchedKey.toUpperCase()}-

@@ -14,7 +14,7 @@ import {
   ShieldCheck,
   Sparkles,
 } from "lucide-react";
-import { CountUp } from "@/components/premium";
+import { CountUp, Tooltip } from "@/components/premium";
 import { REPORTS, DR_LABELS, type ReportRecord } from "@/lib/clinicData";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -277,13 +277,14 @@ export default function Reports() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((r) => (
+                  {filtered.map((r, i) => (
                     <tr
                       key={r.id}
                       className={cn(
-                        "cursor-pointer border-b transition-colors last:border-b-0 hover:bg-muted/40",
+                        "anim-rise cursor-pointer border-b transition-colors duration-200 last:border-b-0 hover:bg-muted/40",
                         selectedId === r.id && "bg-blue-50/50",
                       )}
+                      style={{ animationDelay: `${Math.min(i * 40, 320)}ms` }}
                       onClick={() => setSelectedId(r.id)}
                     >
                       <td className="nb-mono px-4 py-3 text-xs font-medium text-foreground">
@@ -309,7 +310,10 @@ export default function Reports() {
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-1">
-                          <IconButton label="View" onClick={() => setSelectedId(r.id)}>
+                          <IconButton
+                            label="View"
+                            onClick={() => setSelectedId(r.id)}
+                          >
                             <Eye className="size-3.5" />
                           </IconButton>
                           <IconButton
@@ -322,10 +326,24 @@ export default function Reports() {
                           >
                             <Download className="size-3.5" />
                           </IconButton>
-                          <IconButton label="Share">
+                          <IconButton
+                            label="Share"
+                            onClick={() =>
+                              toast.success(`Share link copied for ${r.id}`, {
+                                description: "Secure link expires in 7 days.",
+                              })
+                            }
+                          >
                             <Send className="size-3.5" />
                           </IconButton>
-                          <IconButton label="Archive">
+                          <IconButton
+                            label="Archive"
+                            onClick={() =>
+                              toast(`Report ${r.id} archived`, {
+                                description: "Restore it anytime from Archived filters.",
+                              })
+                            }
+                          >
                             <Archive className="size-3.5" />
                           </IconButton>
                         </div>
@@ -351,7 +369,7 @@ export default function Reports() {
           {selected && (
             <aside>
               <div className="panel nb-pop sticky top-24 max-h-[calc(100vh-8rem)] overflow-y-auto">
-                <ReportPreview report={selected} />
+                <ReportPreview key={selected.id} report={selected} />
               </div>
             </aside>
           )}
@@ -371,18 +389,19 @@ function IconButton({
   onClick?: () => void;
 }) {
   return (
-    <button
-      type="button"
-      title={label}
-      aria-label={label}
-      onClick={(e) => {
-        e.stopPropagation();
-        onClick?.();
-      }}
-      className="cursor-pointer rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-    >
-      {children}
-    </button>
+    <Tooltip label={label}>
+      <button
+        type="button"
+        aria-label={label}
+        onClick={(e) => {
+          e.stopPropagation();
+          onClick?.();
+        }}
+        className="cursor-pointer rounded-md p-1.5 text-muted-foreground transition-all duration-150 hover:bg-muted hover:text-foreground active:scale-90"
+      >
+        {children}
+      </button>
+    </Tooltip>
   );
 }
 
@@ -416,7 +435,7 @@ function SummaryCard({
 
 function ReportPreview({ report }: { report: ReportRecord }) {
   return (
-    <div className="p-5">
+    <div className="anim-rise p-5">
       <div className="flex items-center justify-between">
         <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-primary">
           RetinaScan AI
