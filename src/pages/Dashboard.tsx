@@ -4,6 +4,7 @@ import { useScreeningHistory } from "@/context/ScreeningHistoryContext";
 import { ArrowUpDown, Search } from "lucide-react";
 import logoMark from "@/assets/logo.svg";
 import { CountUp } from "@/components/premium";
+import { Sparkline } from "@/components/graphics";
 import { cn } from "@/lib/utils";
 
 type SortKey = "date" | "confidence" | "stage";
@@ -75,27 +76,51 @@ export default function Dashboard() {
           subtitle="Auditable records of every AI screening run in this session"
         />
 
-        {/* Summary stats */}
+        {/* Summary stats — each with a session trend sparkline */}
         <div className="grid gap-4 sm:grid-cols-3">
-          <div className="panel nb-pop nb-pop-hover p-5">
-            <div className="text-3xl font-semibold tracking-tight text-foreground">
-              <CountUp value={stats.total} duration={700} />
+          <div className="panel nb-pop nb-pop-hover tint-blue p-5">
+            <div className="flex items-start justify-between">
+              <div className="text-3xl font-semibold tracking-tight text-foreground">
+                <CountUp value={stats.total} duration={700} />
+              </div>
+              {history.length >= 2 && (
+                <Sparkline
+                  values={history.map((r) => r.confidence)}
+                  className="mt-1 text-blue-500"
+                />
+              )}
             </div>
             <div className="mt-1 text-xs font-medium text-muted-foreground">
               Screenings this session
             </div>
           </div>
-          <div className="panel nb-pop nb-pop-hover p-5">
-            <div className="text-3xl font-semibold tracking-tight text-red-600">
-              <CountUp value={stats.referrals} duration={700} />
+          <div className="panel nb-pop nb-pop-hover tint-rose p-5">
+            <div className="flex items-start justify-between">
+              <div className="text-3xl font-semibold tracking-tight text-red-600">
+                <CountUp value={stats.referrals} duration={700} />
+              </div>
+              {history.length >= 2 && (
+                <Sparkline
+                  values={history.map((r) => (r.referable ? 1 : 0))}
+                  className="mt-1 text-rose-500"
+                />
+              )}
             </div>
             <div className="mt-1 text-xs font-medium text-muted-foreground">
               Referrals recommended
             </div>
           </div>
-          <div className="panel nb-pop nb-pop-hover p-5">
-            <div className="text-3xl font-semibold tracking-tight text-foreground">
-              <CountUp value={stats.avgConfidence} suffix="%" duration={700} />
+          <div className="panel nb-pop nb-pop-hover tint-teal p-5">
+            <div className="flex items-start justify-between">
+              <div className="text-3xl font-semibold tracking-tight text-foreground">
+                <CountUp value={stats.avgConfidence} suffix="%" duration={700} />
+              </div>
+              {history.length >= 2 && (
+                <Sparkline
+                  values={history.map((r) => r.drStage)}
+                  className="mt-1 text-teal-500"
+                />
+              )}
             </div>
             <div className="mt-1 text-xs font-medium text-muted-foreground">
               Mean model confidence

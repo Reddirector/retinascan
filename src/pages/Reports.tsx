@@ -15,6 +15,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { CountUp, Tooltip } from "@/components/premium";
+import { RetinaArt } from "@/components/graphics";
 import { REPORTS, DR_LABELS, type ReportRecord } from "@/lib/clinicData";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -504,10 +505,24 @@ function ReportPreview({ report }: { report: ReportRecord }) {
       </Section>
 
       <Section title="Grad-CAM Explainability">
-        <div className="rounded-lg border bg-slate-50 p-3 text-xs text-muted-foreground">
+        <div className="relative overflow-hidden rounded-lg border">
+          <RetinaArt stage={report.drStage} className="h-36 w-full" />
+          <RetinaArt
+            stage={report.drStage}
+            attention
+            className="anim-fade-slow absolute inset-0 h-full w-full"
+          />
+          <span className="absolute left-2 top-2 rounded-md bg-black/60 px-2 py-0.5 text-[10px] font-medium text-white">
+            AI Attention Heatmap
+          </span>
+          <span className="absolute bottom-2 right-2 rounded-full border border-emerald-200 bg-emerald-50/95 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+            Regions verified
+          </span>
+        </div>
+        <p className="mt-2 text-xs text-muted-foreground">
           Grad-CAM attention regions overlaid on the fundus image; salient regions
           correspond to detected lesion locations.
-        </div>
+        </p>
       </Section>
 
       <Section title="Evidence & RAG Sources">

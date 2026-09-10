@@ -17,6 +17,7 @@ import {
   Users,
 } from "lucide-react";
 import { CountUp } from "@/components/premium";
+import { ProgressionChart, Sparkline } from "@/components/graphics";
 import {
   PATIENTS,
   DR_LABELS,
@@ -444,7 +445,7 @@ function PatientProfile({
                   <div className="mt-2 flex items-center gap-2">
                     <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
                       <div
-                        className="h-full rounded-full bg-blue-500"
+                        className="h-full rounded-full bg-blue-500 transition-all duration-700"
                         style={{ width: `${s.confidence}%` }}
                       />
                     </div>
@@ -515,15 +516,32 @@ function PatientProfile({
               </button>
             </div>
           </section>
-        </div>
-
-        {/* DR progression timeline */}
-        <section className="panel nb-pop p-6">
-          <h2 className="text-sm font-semibold text-foreground">DR Progression</h2>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Longitudinal staging across previous screenings (oldest → latest).
-          </p>
-          <div className="mt-6 flex items-stretch">
+        </div>          {/* DR progression timeline */}
+          <section className="panel nb-pop p-6">
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <h2 className="text-sm font-semibold text-foreground">DR Progression</h2>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Longitudinal staging across previous screenings (oldest → latest).
+                </p>
+              </div>
+              {screenings.length >= 2 && (
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50/70 px-2.5 py-1 text-[10px] font-semibold text-blue-700">
+                  <Activity className="size-3" />
+                  Trend
+                </span>
+              )}
+            </div>
+            {screenings.length >= 2 && (
+              <div className="mt-4 rounded-lg border bg-gradient-to-br from-blue-50/60 to-teal-50/40 p-3">
+                <ProgressionChart
+                  points={[...screenings]
+                    .reverse()
+                    .map((s) => ({ label: s.date.split(",")[0], stage: s.drStage }))}
+                />
+              </div>
+            )}
+            <div className="mt-6 flex items-stretch">
             {[...screenings].reverse().map((s, i, arr) => (
               <div key={`${s.date}-tl`} className="flex flex-1 items-start">
                 <div className="flex flex-col items-center">

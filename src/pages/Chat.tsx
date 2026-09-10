@@ -2029,6 +2029,14 @@ export default function Chat() {
                   </div>
                   <div>
                     <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                      Analysis Source
+                    </dt>
+                    <dd className="mt-0.5 font-medium text-foreground">
+                      {imageUrl ? "Uploaded fundus image" : "Demo library (synthetic fundus)"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                       Confidence
                     </dt>
                     <dd className="mt-1 flex items-center gap-2">
