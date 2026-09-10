@@ -7,9 +7,12 @@ import {
   ChevronDown,
   CircleAlert,
   CircleCheck,
+  Dot,
   FileSearch,
   FileText,
+  GitFork,
   Loader2,
+  Palette,
   Maximize2,
   Minimize2,
   MoveHorizontal,
@@ -57,6 +60,15 @@ interface MatchedResult {
 
 type StageStatus = "pending" | "active" | "complete";
 
+interface StageAccent {
+  chip: string;
+  border: string;
+  label: string;
+  bar: string;
+  dot: string;
+  statusText: string;
+}
+
 interface Stage {
   id: number;
   num: string;
@@ -64,6 +76,7 @@ interface Stage {
   icon: LucideIcon;
   range: [number, number];
   statusLines: string[];
+  accent: StageAccent;
 }
 
 type ChatEntry =
@@ -98,6 +111,14 @@ const STAGES: Stage[] = [
       "Validating image format & resolution...",
       "Running quality gate checks...",
     ],
+    accent: {
+      chip: "bg-violet-100 text-violet-600",
+      border: "border-violet-200 bg-violet-50/70",
+      label: "text-violet-700",
+      bar: "bg-violet-500",
+      dot: "bg-violet-500",
+      statusText: "text-violet-600/80",
+    },
   },
   {
     id: 2,
@@ -109,6 +130,14 @@ const STAGES: Stage[] = [
       "Running EfficientNet-B0 classification...",
       "Generating Grad-CAM heatmap...",
     ],
+    accent: {
+      chip: "bg-blue-100 text-blue-600",
+      border: "border-blue-200 bg-blue-50/70",
+      label: "text-blue-700",
+      bar: "bg-blue-500",
+      dot: "bg-blue-500",
+      statusText: "text-blue-600/80",
+    },
   },
   {
     id: 3,
@@ -120,6 +149,14 @@ const STAGES: Stage[] = [
       "Orchestrating multi-agent reasoning...",
       "Evaluating staging rationale...",
     ],
+    accent: {
+      chip: "bg-cyan-100 text-cyan-600",
+      border: "border-cyan-200 bg-cyan-50/70",
+      label: "text-cyan-700",
+      bar: "bg-cyan-500",
+      dot: "bg-cyan-500",
+      statusText: "text-cyan-600/80",
+    },
   },
   {
     id: 4,
@@ -131,6 +168,14 @@ const STAGES: Stage[] = [
       "Embedding findings & querying guidelines...",
       "Retrieving clinical practice patterns...",
     ],
+    accent: {
+      chip: "bg-teal-100 text-teal-600",
+      border: "border-teal-200 bg-teal-50/70",
+      label: "text-teal-700",
+      bar: "bg-teal-500",
+      dot: "bg-teal-500",
+      statusText: "text-teal-600/80",
+    },
   },
   {
     id: 5,
@@ -142,6 +187,14 @@ const STAGES: Stage[] = [
       "Cross-checking staging against criteria...",
       "Verifying referral threshold logic...",
     ],
+    accent: {
+      chip: "bg-emerald-100 text-emerald-600",
+      border: "border-emerald-200 bg-emerald-50/70",
+      label: "text-emerald-700",
+      bar: "bg-emerald-500",
+      dot: "bg-emerald-500",
+      statusText: "text-emerald-600/80",
+    },
   },
   {
     id: 6,
@@ -150,6 +203,14 @@ const STAGES: Stage[] = [
     icon: Send,
     range: [2000, 3000],
     statusLines: ["Formatting assessment...", "Delivery complete."],
+    accent: {
+      chip: "bg-indigo-100 text-indigo-600",
+      border: "border-indigo-200 bg-indigo-50/70",
+      label: "text-indigo-700",
+      bar: "bg-indigo-500",
+      dot: "bg-indigo-500",
+      statusText: "text-indigo-600/80",
+    },
   },
 ];
 
@@ -285,6 +346,7 @@ interface Finding {
   detected: boolean;
   conf: number;
   location: string;
+  icon: "micro" | "hemorrhage" | "exudate" | "neo";
 }
 
 function findingsFor(stage: number): Finding[] {
@@ -294,32 +356,51 @@ function findingsFor(stage: number): Finding[] {
       detected: stage >= 2,
       conf: stage >= 2 ? 94 : 2,
       location: "Mid-peripheral retina",
+      icon: "micro",
     },
     {
       name: "Retinal Hemorrhages",
       detected: stage >= 2,
       conf: stage >= 2 ? 91 : 1,
       location: "Posterior pole",
+      icon: "hemorrhage",
     },
     {
       name: "Hard Exudates",
       detected: stage >= 2,
       conf: stage >= 2 ? 88 : 1,
       location: "Near macula",
+      icon: "exudate",
     },
     {
       name: "Neovascularization",
       detected: stage >= 4,
       conf: stage >= 4 ? 90 : 0,
       location: "Optic disc",
+      icon: "neo",
     },
   ];
+}
+
+/** Distinct icon + tint per lesion type. */
+function findingVisual(kind: Finding["icon"]) {
+  switch (kind) {
+    case "hemorrhage":
+      return { icon: CircleAlert, chip: "bg-rose-100 text-rose-600", bar: "bg-rose-500" };
+    case "exudate":
+      return { icon: Palette, chip: "bg-amber-100 text-amber-600", bar: "bg-amber-500" };
+    case "neo":
+      return { icon: GitFork, chip: "bg-red-100 text-red-600", bar: "bg-red-500" };
+    default:
+      return { icon: Dot, chip: "bg-blue-100 text-blue-600", bar: "bg-blue-500" };
+  }
 }
 
 const RAG_SOURCES = [
   {
     title: "AAO Preferred Practice Pattern — Diabetic Retinopathy",
     type: "Clinical Guideline",
+    typeCls: "border-blue-200 bg-blue-50 text-blue-700",
     evidence: "Referral thresholds for moderate NPDR within 3 months.",
     score: 96,
     ref: "AAO PPP 2024",
@@ -327,6 +408,7 @@ const RAG_SOURCES = [
   {
     title: "International DR Severity Scale (ETDRS-based)",
     type: "Classification Criteria",
+    typeCls: "border-violet-200 bg-violet-50 text-violet-700",
     evidence: "Grading rubric for microaneurysms, hemorrhages and exudates.",
     score: 93,
     ref: "ICDR 2007",
@@ -334,6 +416,7 @@ const RAG_SOURCES = [
   {
     title: "Deep learning for DR detection in fundus photographs",
     type: "Peer-reviewed Literature",
+    typeCls: "border-teal-200 bg-teal-50 text-teal-700",
     evidence: "Model architecture benchmarks for fundus-level grading.",
     score: 89,
     ref: "JAMA Netw Open",
@@ -762,10 +845,10 @@ export default function Chat() {
                   </span>
                 )}
               </div>
-              {/* overall progress */}
+              {/* overall progress — violet→blue→teal→emerald spectrum */}
               <div className="mb-3 h-1 overflow-hidden rounded-full bg-border">
                 <div
-                  className="h-full rounded-full bg-blue-500 transition-all duration-700 ease-out"
+                  className="h-full rounded-full bg-gradient-to-r from-violet-500 via-blue-500 to-emerald-500 transition-all duration-700 ease-out"
                   style={{
                     width: `${
                       (pipelineEntry.statuses.filter((s) => s === "complete").length /
@@ -788,8 +871,9 @@ export default function Chat() {
                         i < TOTAL_STAGES - 1 &&
                           "after:absolute after:top-1/2 after:-right-2 after:hidden after:h-px after:w-2 after:bg-border after:content-[''] lg:after:block",
                         status === "pending" && "border-border bg-muted/40",
-                        status === "active" && "border-blue-200 bg-blue-50",
-                        status === "complete" && "border-emerald-200 bg-emerald-50",
+                        status === "active" && stage.accent.border,
+                        status === "complete" &&
+                          "border-emerald-200 bg-gradient-to-br from-emerald-50/90 to-teal-50/60",
                       )}
                     >
                       <div className="flex items-center justify-between">
@@ -800,7 +884,7 @@ export default function Chat() {
                           className={cn(
                             "flex size-6 items-center justify-center rounded-full",
                             status === "pending" && "bg-muted text-muted-foreground",
-                            status === "active" && "bg-blue-100 text-blue-600",
+                            status === "active" && stage.accent.chip,
                             status === "complete" && "bg-emerald-100 text-emerald-600",
                           )}
                         >
@@ -816,7 +900,7 @@ export default function Chat() {
                       <div
                         className={cn(
                           "mt-1.5 text-[11px] font-medium leading-tight",
-                          status === "active" ? "text-blue-700" : "text-foreground",
+                          status === "active" ? stage.accent.label : "text-foreground",
                         )}
                       >
                         {stage.label}
@@ -827,13 +911,19 @@ export default function Chat() {
                           className={cn(
                             "h-full rounded-full transition-all duration-500",
                             status === "complete" && "w-full bg-emerald-500",
-                            status === "active" && "w-2/3 bg-blue-500",
+                            status === "active" &&
+                              cn("w-2/3", stage.accent.bar),
                             status === "pending" && "w-0",
                           )}
                         />
                       </div>
                       {status === "active" && pipelineEntry.activeLine && (
-                        <p className="nb-mono mt-1.5 truncate text-[10px] text-blue-600/80">
+                        <p
+                          className={cn(
+                            "nb-mono mt-1.5 truncate text-[10px]",
+                            stage.accent.statusText,
+                          )}
+                        >
                           {pipelineEntry.activeLine}
                         </p>
                       )}
@@ -850,7 +940,7 @@ export default function Chat() {
               onClick={() => fileInputRef.current?.click()}
               className="panel nb-pop-hover flex w-full cursor-pointer flex-col items-center gap-3 border-dashed bg-card px-6 py-12 text-center transition-colors hover:border-blue-300 hover:bg-blue-50/40"
             >
-              <span className="flex size-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+              <span className="flex size-12 items-center justify-center rounded-full bg-gradient-to-br from-blue-100 to-teal-100 text-blue-600">
                 <ScanEye className="size-6" />
               </span>
               <div>
@@ -1006,7 +1096,15 @@ export default function Chat() {
                           <div
                             className={cn(
                               "h-full rounded-full transition-all duration-700 ease-out",
-                              d.stage === result.dr_stage ? "bg-blue-500" : "bg-slate-300",
+                              d.stage === result.dr_stage
+                                ? [
+                                    "bg-emerald-500",
+                                    "bg-teal-500",
+                                    "bg-amber-500",
+                                    "bg-orange-500",
+                                    "bg-red-500",
+                                  ][d.stage]
+                                : "bg-slate-300",
                             )}
                             style={{
                               width: `${Math.max(d.pct, 1.5)}%`,
@@ -1218,8 +1316,18 @@ export default function Chat() {
                     style={{ animationDelay: `${i * 90}ms` }}
                   >
                     <div className="flex items-center justify-between">
-                      <span className="flex size-8 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
-                        <ScanEye className="size-4" />
+                      <span
+                        className={cn(
+                          "flex size-8 items-center justify-center rounded-lg",
+                          f.detected
+                            ? findingVisual(f.icon).chip
+                            : "bg-slate-100 text-slate-400",
+                        )}
+                      >
+                        {(() => {
+                          const V = findingVisual(f.icon).icon;
+                          return <V className="size-4" />;
+                        })()}
                       </span>
                       <span
                         className={cn(
@@ -1243,7 +1351,9 @@ export default function Chat() {
                         <div
                           className={cn(
                             "h-full rounded-full transition-all duration-700 ease-out",
-                            f.detected ? "bg-blue-500" : "bg-slate-300",
+                            f.detected
+                              ? findingVisual(f.icon).bar
+                              : "bg-slate-300",
                           )}
                           style={{
                             width: `${f.conf}%`,
@@ -1282,6 +1392,24 @@ export default function Chat() {
                     pct={d.pct}
                     active={d.stage === result.dr_stage}
                     delay={i * 100}
+                    barClassName={
+                      [
+                        "bg-emerald-500",
+                        "bg-teal-500",
+                        "bg-amber-500",
+                        "bg-orange-500",
+                        "bg-red-500",
+                      ][d.stage]
+                    }
+                    valueClassName={
+                      [
+                        "font-semibold text-emerald-600",
+                        "font-semibold text-teal-600",
+                        "font-semibold text-amber-600",
+                        "font-semibold text-orange-600",
+                        "font-semibold text-red-600",
+                      ][d.stage]
+                    }
                   />
                 ))}
               </div>
@@ -1386,7 +1514,7 @@ export default function Chat() {
                 <h2 className="text-sm font-semibold text-foreground">
                   Retrieved Evidence
                 </h2>
-                <span className="inline-flex items-center gap-1.5 rounded-full border bg-blue-50 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-blue-700">
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-200 bg-gradient-to-r from-blue-50 to-teal-50 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-blue-700">
                   Hybrid RAG
                 </span>
               </div>
@@ -1406,7 +1534,7 @@ export default function Chat() {
                         {src.title}
                       </span>
                       <span className="inline-flex items-center gap-1.5">
-                        <span className="rounded-full border bg-card px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                        <span className={cn("rounded-full border px-2 py-0.5 text-[10px] font-medium", src.typeCls)}>
                           {src.type}
                         </span>
                         <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
@@ -1680,7 +1808,7 @@ export default function Chat() {
               <button
                 type="submit"
                 disabled={busy || isRunning || !input.trim()}
-                className="flex cursor-pointer items-center gap-1.5 rounded-lg bg-primary px-3.5 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
+                className="flex cursor-pointer items-center gap-1.5 rounded-lg bg-primary px-3.5 py-2.5 text-sm font-medium text-white btn-grad shadow-sm transition-all hover:brightness-105 active:scale-[0.98] disabled:opacity-50"
               >
                 <Send className="size-3.5" />
                 Send
@@ -1701,14 +1829,17 @@ export default function Chat() {
           {/* Technical status strip — live service indicators */}
           <div className="flex flex-wrap items-center gap-2 px-1">
             {[
-              ["Model", "DR Vision Model"],
-              ["Explainability", "Grad-CAM"],
-              ["RAG", "Hybrid"],
-              ["Verification", "Multi-Layer"],
-            ].map(([label, value]) => (
+              ["Model", "DR Vision Model", "border-blue-200 bg-blue-50/70"],
+              ["Explainability", "Grad-CAM", "border-violet-200 bg-violet-50/70"],
+              ["RAG", "Hybrid", "border-teal-200 bg-teal-50/70"],
+              ["Verification", "Multi-Layer", "border-emerald-200 bg-emerald-50/70"],
+            ].map(([label, value, chipCls]) => (
               <span
                 key={label}
-                className="inline-flex items-center gap-1.5 rounded-full border bg-card px-2.5 py-1 text-[11px]"
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px]",
+                  chipCls,
+                )}
               >
                 <span className="text-muted-foreground">{label}</span>
                 <span className="font-semibold text-foreground">{value}</span>

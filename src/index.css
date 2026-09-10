@@ -181,6 +181,57 @@
     background-clip: text;
     color: transparent;
   }
+  /* Blue → teal gradient for primary CTAs and the brand mark */
+  .btn-grad {
+    background-image: linear-gradient(
+      100deg,
+      oklch(0.55 0.13 258),
+      oklch(0.62 0.11 200)
+    );
+  }
+  /* Soft tinted washes layered over .panel for summary/stat cards */
+  .tint-blue {
+    background-image: linear-gradient(
+      135deg,
+      oklch(0.94 0.035 250 / 0.85),
+      white 62%
+    );
+  }
+  .tint-teal {
+    background-image: linear-gradient(
+      135deg,
+      oklch(0.94 0.045 185 / 0.85),
+      white 62%
+    );
+  }
+  .tint-emerald {
+    background-image: linear-gradient(
+      135deg,
+      oklch(0.94 0.05 160 / 0.85),
+      white 62%
+    );
+  }
+  .tint-amber {
+    background-image: linear-gradient(
+      135deg,
+      oklch(0.95 0.05 90 / 0.85),
+      white 62%
+    );
+  }
+  .tint-rose {
+    background-image: linear-gradient(
+      135deg,
+      oklch(0.94 0.04 15 / 0.85),
+      white 62%
+    );
+  }
+  .tint-violet {
+    background-image: linear-gradient(
+      135deg,
+      oklch(0.94 0.035 300 / 0.85),
+      white 62%
+    );
+  }
 }
 
 /* ------------------- Premium keyframes & animation utilities ------------------ */

@@ -421,7 +421,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           onClick={() => navigate("/")}
           className="mb-8 flex cursor-pointer items-center gap-3 px-2 text-left"
         >
-          <div className="flex size-10 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
+          <div className="btn-grad flex size-10 items-center justify-center rounded-xl text-white shadow-sm">
             <ScanEye className="size-5" />
           </div>
           <div className="leading-tight">
@@ -513,7 +513,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           onClick={() => navigate("/")}
           className="flex cursor-pointer items-center gap-2"
         >
-          <div className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+          <div className="btn-grad flex size-8 items-center justify-center rounded-lg text-white">
             <ScanEye className="size-4" />
           </div>
           <span className="text-sm font-semibold tracking-tight">
@@ -648,7 +648,7 @@ export function CaseHistoryTable() {
         <button
           type="button"
           onClick={() => navigate("/chat")}
-          className="mt-4 inline-flex cursor-pointer items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+          className="btn-grad mt-4 inline-flex cursor-pointer items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-white shadow-sm transition-all hover:brightness-105 active:scale-[0.98]"
         >
           <ScanEye className="size-4" />
           Start a screening

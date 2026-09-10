@@ -146,7 +146,7 @@ export default function Reports() {
                 description: "A new AI screening report has been created.",
               })
             }
-            className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90"
+            className="btn-grad inline-flex cursor-pointer items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-white shadow-sm transition-all hover:brightness-105 active:scale-[0.98]"
           >
             <FileText className="size-4" />
             Generate Report
@@ -157,25 +157,29 @@ export default function Reports() {
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <SummaryCard
             icon={FileText}
-            iconClass="bg-blue-50 text-blue-600"
+            iconClass="bg-blue-100 text-blue-600"
+            cardClass="tint-blue"
             label="Reports Generated"
             value={stats.total}
           />
           <SummaryCard
             icon={Clock}
-            iconClass="bg-amber-50 text-amber-600"
+            iconClass="bg-amber-100 text-amber-600"
+            cardClass="tint-amber"
             label="Pending Review"
             value={stats.pending}
           />
           <SummaryCard
             icon={ShieldCheck}
-            iconClass="bg-emerald-50 text-emerald-600"
+            iconClass="bg-emerald-100 text-emerald-600"
+            cardClass="tint-emerald"
             label="Clinician Verified"
             value={stats.verified}
           />
           <SummaryCard
             icon={Send}
-            iconClass="bg-red-50 text-red-600"
+            iconClass="bg-rose-100 text-rose-600"
+            cardClass="tint-rose"
             label="Referral Reports"
             value={stats.referral}
           />
@@ -408,16 +412,18 @@ function IconButton({
 function SummaryCard({
   icon: Icon,
   iconClass,
+  cardClass,
   label,
   value,
 }: {
   icon: typeof FileText;
   iconClass: string;
+  cardClass?: string;
   label: string;
   value: number;
 }) {
   return (
-    <div className="panel nb-pop nb-pop-hover p-5">
+    <div className={cn("panel nb-pop nb-pop-hover p-5", cardClass)}>
       <span className={cn("flex size-9 items-center justify-center rounded-lg", iconClass)}>
         <Icon className="size-4.5" />
       </span>

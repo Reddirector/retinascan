@@ -253,11 +253,17 @@ export function SeverityBar({
   pct,
   active,
   delay = 0,
+  barClassName,
+  valueClassName,
 }: {
   name: string;
   pct: number;
   active: boolean;
   delay?: number;
+  /** Optional per-stage bar color (overrides default active gradient). */
+  barClassName?: string;
+  /** Optional per-stage value text color. */
+  valueClassName?: string;
 }) {
   return (
     <div className="group/sev flex items-center gap-3">
@@ -274,7 +280,9 @@ export function SeverityBar({
           <div
             className={cn(
               "h-full rounded-full transition-all duration-700 ease-out group-hover/sev:brightness-110",
-              active ? "bg-gradient-to-r from-blue-500 to-teal-400" : "bg-slate-300",
+              active
+                ? (barClassName ?? "bg-gradient-to-r from-blue-500 to-teal-400")
+                : "bg-slate-300",
             )}
             style={{
               width: `${Math.max(pct, 0.8)}%`,
@@ -286,7 +294,7 @@ export function SeverityBar({
       <span
         className={cn(
           "nb-mono w-14 text-right text-xs tabular-nums",
-          active ? "font-semibold text-blue-600" : "text-muted-foreground",
+          active ? (valueClassName ?? "font-semibold text-blue-600") : "text-muted-foreground",
         )}
       >
         <CountUp value={pct} decimals={pct % 1 === 0 ? 0 : 1} suffix="%" duration={700} />

@@ -39,15 +39,60 @@ type SectionId =
   | "protocol"
   | "system";
 
-const SECTIONS: { id: SectionId; label: string; icon: typeof Settings2 }[] = [
-  { id: "general", label: "General", icon: Settings2 },
-  { id: "ai-models", label: "AI Models", icon: BrainCircuit },
-  { id: "rag", label: "RAG & Knowledge", icon: Library },
-  { id: "notifications", label: "Notifications", icon: Bell },
-  { id: "security", label: "Security & Privacy", icon: Lock },
-  { id: "users", label: "Users & Roles", icon: Users },
-  { id: "protocol", label: "Clinical Protocol", icon: ListChecks },
-  { id: "system", label: "System", icon: Server },
+const SECTIONS: {
+  id: SectionId;
+  label: string;
+  icon: typeof Settings2;
+  activeCls: string;
+}[] = [
+  {
+    id: "general",
+    label: "General",
+    icon: Settings2,
+    activeCls: "bg-blue-50 text-blue-700",
+  },
+  {
+    id: "ai-models",
+    label: "AI Models",
+    icon: BrainCircuit,
+    activeCls: "bg-violet-50 text-violet-700",
+  },
+  {
+    id: "rag",
+    label: "RAG & Knowledge",
+    icon: Library,
+    activeCls: "bg-teal-50 text-teal-700",
+  },
+  {
+    id: "notifications",
+    label: "Notifications",
+    icon: Bell,
+    activeCls: "bg-amber-50 text-amber-700",
+  },
+  {
+    id: "security",
+    label: "Security & Privacy",
+    icon: Lock,
+    activeCls: "bg-emerald-50 text-emerald-700",
+  },
+  {
+    id: "users",
+    label: "Users & Roles",
+    icon: Users,
+    activeCls: "bg-cyan-50 text-cyan-700",
+  },
+  {
+    id: "protocol",
+    label: "Clinical Protocol",
+    icon: ListChecks,
+    activeCls: "bg-indigo-50 text-indigo-700",
+  },
+  {
+    id: "system",
+    label: "System",
+    icon: Server,
+    activeCls: "bg-rose-50 text-rose-700",
+  },
 ];
 
 export default function Settings() {
@@ -74,7 +119,7 @@ export default function Settings() {
                   className={cn(
                     "flex w-full cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium outline-none transition-colors",
                     active
-                      ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                      ? s.activeCls
                       : "text-muted-foreground hover:bg-muted hover:text-foreground",
                   )}
                 >
