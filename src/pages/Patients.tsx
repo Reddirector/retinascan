@@ -16,6 +16,7 @@ import {
   Stethoscope,
   Users,
 } from "lucide-react";
+import { CountUp } from "@/components/premium";
 import {
   PATIENTS,
   DR_LABELS,
@@ -245,7 +246,7 @@ export default function Patients() {
                 {filtered.map((p) => (
                   <tr
                     key={p.id}
-                    className="cursor-pointer border-b transition-colors last:border-b-0 hover:bg-muted/40"
+                    className="cursor-pointer border-b transition-all duration-200 last:border-b-0 hover:bg-muted/40 hover:pl-1"
                     onClick={() => setSelected(p)}
                   >
                     <td className="nb-mono px-4 py-3 text-xs text-muted-foreground">
@@ -316,13 +317,15 @@ function SummaryCard({
   value: number;
 }) {
   return (
-    <div className="panel nb-pop p-5">
+    <div className="panel nb-pop nb-pop-hover p-5">
       <div className="flex items-center justify-between">
         <span className={cn("flex size-9 items-center justify-center rounded-lg", iconClass)}>
           <Icon className="size-4.5" />
         </span>
       </div>
-      <div className="mt-3 text-2xl font-semibold tracking-tight text-foreground">{value}</div>
+      <div className="mt-3 text-2xl font-semibold tracking-tight text-foreground">
+        <CountUp value={value} duration={800} />
+      </div>
       <div className="mt-0.5 text-xs font-medium text-muted-foreground">{label}</div>
     </div>
   );
@@ -542,7 +545,9 @@ function PatientProfile({
                   </span>
                 </div>
                 {i < arr.length - 1 && (
-                  <div className="mx-1 mt-[18px] h-0.5 flex-1 rounded-full bg-border" />
+                  <div className="mx-1 mt-[18px] h-0.5 flex-1 overflow-hidden rounded-full bg-border">
+                    <div className="h-full w-full rounded-full bg-gradient-to-r from-blue-200 to-teal-200 transition-all duration-700" />
+                  </div>
                 )}
               </div>
             ))}

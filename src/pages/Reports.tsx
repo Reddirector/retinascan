@@ -14,8 +14,10 @@ import {
   ShieldCheck,
   Sparkles,
 } from "lucide-react";
+import { CountUp } from "@/components/premium";
 import { REPORTS, DR_LABELS, type ReportRecord } from "@/lib/clinicData";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 type VerificationFilter = "all" | "Pending Review" | "Clinician Verified" | "Archived";
 type ReferralFilter = "all" | "refer" | "no-referral";
@@ -139,6 +141,11 @@ export default function Reports() {
         >
           <button
             type="button"
+            onClick={() =>
+              toast.success("Report generated", {
+                description: "A new AI screening report has been created.",
+              })
+            }
             className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90"
           >
             <FileText className="size-4" />
@@ -305,7 +312,14 @@ export default function Reports() {
                           <IconButton label="View" onClick={() => setSelectedId(r.id)}>
                             <Eye className="size-3.5" />
                           </IconButton>
-                          <IconButton label="Download">
+                          <IconButton
+                            label="Download"
+                            onClick={() =>
+                              toast.success(`Report ${r.id} downloaded`, {
+                                description: "PDF exported to your downloads folder.",
+                              })
+                            }
+                          >
                             <Download className="size-3.5" />
                           </IconButton>
                           <IconButton label="Share">
@@ -384,11 +398,13 @@ function SummaryCard({
   value: number;
 }) {
   return (
-    <div className="panel nb-pop p-5">
+    <div className="panel nb-pop nb-pop-hover p-5">
       <span className={cn("flex size-9 items-center justify-center rounded-lg", iconClass)}>
         <Icon className="size-4.5" />
       </span>
-      <div className="mt-3 text-2xl font-semibold tracking-tight text-foreground">{value}</div>
+      <div className="mt-3 text-2xl font-semibold tracking-tight text-foreground">
+        <CountUp value={value} duration={800} />
+      </div>
       <div className="mt-0.5 text-xs font-medium text-muted-foreground">{label}</div>
     </div>
   );
@@ -525,6 +541,11 @@ function ReportPreview({ report }: { report: ReportRecord }) {
       <div className="mt-4 flex gap-2">
         <button
           type="button"
+          onClick={() =>
+            toast.success("Report regenerated", {
+              description: "AI assessment refreshed with the latest model version.",
+            })
+          }
           className="inline-flex flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90"
         >
           <Sparkles className="size-3.5" />
@@ -532,6 +553,11 @@ function ReportPreview({ report }: { report: ReportRecord }) {
         </button>
         <button
           type="button"
+          onClick={() =>
+            toast.success(`Report ${report.id} downloaded`, {
+              description: "PDF exported to your downloads folder.",
+            })
+          }
           className="inline-flex flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-lg border bg-card px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
         >
           <Download className="size-3.5" />

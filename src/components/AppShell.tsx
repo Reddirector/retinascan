@@ -1,3 +1,4 @@
+import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useScreeningHistory } from "@/context/ScreeningHistoryContext";
 import {
@@ -5,11 +6,21 @@ import {
   History,
   LogOut,
   ScanEye,
+  Search,
   Settings,
   Users,
   type LucideIcon,
 } from "lucide-react";
 import { useNavigate, useLocation } from "react-router";
+import {
+  CommandDialog,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 interface NavItem {
@@ -112,11 +123,39 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const [paletteOpen, setPaletteOpen] = useState(false);
+
+  // Global ⌘K / Ctrl+K command palette
+  useEffect(() => {
+    const down = (e: KeyboardEvent) => {
+      if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        setPaletteOpen((open) => !open);
+      }
+    };
+    document.addEventListener("keydown", down);
+    return () => document.removeEventListener("keydown", down);
+  }, []);
 
   const handleSignOut = async () => {
     await signOut();
     navigate("/");
   };
+
+  const runNav = (to: string) => {
+    setPaletteOpen(false);
+    navigate(to);
+  };
+
+  const paletteItems = useMemo(
+    () =>
+      NAV_ITEMS.map((item) => ({
+        label: item.label,
+        to: item.to,
+        icon: item.icon,
+      })),
+    [],
+  );
 
   return (
     <div className="flex min-h-screen bg-background text-foreground">
@@ -150,18 +189,39 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 disabled={!item.enabled}
                 onClick={() => item.enabled && navigate(item.to)}
                 className={cn(
-                  "flex w-full cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium outline-none transition-colors",
+                  "group relative flex w-full cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium outline-none transition-all duration-200",
                   active
                     ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground",
-                  !item.enabled && "cursor-not-allowed opacity-45 hover:bg-transparent",
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground hover:translate-x-0.5",
+                  !item.enabled && "cursor-not-allowed opacity-45 hover:bg-transparent hover:translate-x-0",
                 )}
               >
-                <item.icon className="size-4" />
+                {/* active navigation indicator */}
+                <span
+                  aria-hidden
+                  className={cn(
+                    "absolute left-0 h-5 w-[3px] rounded-full bg-primary transition-all duration-250",
+                    active ? "opacity-100 scale-y-100" : "opacity-0 scale-y-0",
+                  )}
+                />
+                <item.icon className="size-4 transition-transform duration-200 group-hover:scale-110" />
                 {item.label}
               </button>
             );
           })}
+
+          {/* Command palette trigger */}
+          <button
+            type="button"
+            onClick={() => setPaletteOpen(true)}
+            className="mt-3 flex w-full cursor-pointer items-center justify-between rounded-lg border bg-muted/40 px-3 py-2 text-xs text-muted-foreground transition-colors hover:border-blue-200 hover:bg-blue-50/50 hover:text-foreground"
+          >
+            <span className="inline-flex items-center gap-2">
+              <Search className="size-3.5" />
+              Quick actions…
+            </span>
+            <kbd className="nb-mono rounded border bg-card px-1.5 py-0.5 text-[10px]">⌘K</kbd>
+          </button>
         </nav>
 
         <div className="mt-auto">
@@ -261,6 +321,57 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <main className="min-w-0 flex-1 px-4 pb-16 pt-20 md:px-8 md:py-8">
         <div className="mx-auto w-full max-w-6xl">{children}</div>
       </main>
+
+      {/* Global command palette (⌘K) */}
+      <CommandDialog open={paletteOpen} onOpenChange={setPaletteOpen}>
+        <CommandInput placeholder="Jump to page or run an action…" />
+        <CommandList>
+          <CommandEmpty>No results found.</CommandEmpty>
+          <CommandGroup heading="Navigation">
+            {paletteItems.map((item) => (
+              <CommandItem
+                key={item.to}
+                value={item.label}
+                onSelect={() => runNav(item.to)}
+              >
+                <item.icon className="size-4" />
+                {item.label}
+              </CommandItem>
+            ))}
+          </CommandGroup>
+          <CommandGroup heading="Actions">
+            <CommandItem
+              value="start new screening"
+              onSelect={() => runNav("/chat")}
+            >
+              <ScanEye className="size-4" />
+              Start a new screening
+            </CommandItem>
+            <CommandItem
+              value="sign out"
+              onSelect={() => {
+                setPaletteOpen(false);
+                void handleSignOut();
+              }}
+            >
+              <LogOut className="size-4" />
+              Sign out
+            </CommandItem>
+            <CommandItem
+              value="copy current page link"
+              onSelect={() => {
+                setPaletteOpen(false);
+                void navigator.clipboard
+                  ?.writeText(window.location.href)
+                  .then(() => toast.success("Link copied to clipboard"));
+              }}
+            >
+              <FileText className="size-4" />
+              Copy page link
+            </CommandItem>
+          </CommandGroup>
+        </CommandList>
+      </CommandDialog>
     </div>
   );
 }

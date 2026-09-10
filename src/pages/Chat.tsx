@@ -21,8 +21,19 @@ import {
 } from "lucide-react";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { RichText } from "@/components/RichText";
+import {
+  AIProcessing,
+  CountUp,
+  ServiceHealth,
+  Skeleton,
+  SeverityBar,
+  Tooltip,
+  TypingDots,
+  VerifyCheck,
+} from "@/components/premium";
 import { ChatMessage, useScreeningHistory } from "@/context/ScreeningHistoryContext";
 import { api } from "@/convex/_generated/api";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 /* ------------------------------------------------------------------ */
@@ -548,10 +559,16 @@ export default function Chat() {
             // Should be unreachable (backend falls back to a demo case),
             // but guarantee the report even here.
             streamReport(guaranteedResult(), file.name);
+            toast.success("Screening complete", {
+              description: "AI assessment ready — Moderate NPDR (demo case).",
+            });
             return;
           }
 
           streamReport(data, file.name);
+          toast.success("Screening complete", {
+            description: `AI assessment ready — Stage ${data.dr_stage} · ${data.confidence}% confidence.`,
+          });
         }, elapsed),
       );
     },
@@ -762,7 +779,7 @@ export default function Chat() {
                           )}
                         >
                           {status === "complete" ? (
-                            <Check className="size-3" />
+                            <VerifyCheck className="size-6" />
                           ) : status === "active" ? (
                             <Icon className="size-3 animate-pulse" />
                           ) : (
@@ -825,6 +842,18 @@ export default function Chat() {
             </button>
           )}
 
+          {/* Elegant AI processing + skeletons while the pipeline runs */}
+          {isRunning && (
+            <section className="panel nb-pop p-6">
+              <AIProcessing label="Analyzing retinal image — pipeline in progress" />
+              <div className="mt-5 space-y-2.5">
+                <Skeleton className="h-3.5 w-3/4" />
+                <Skeleton className="h-3.5 w-1/2" />
+                <Skeleton className="h-3.5 w-2/3" />
+              </div>
+            </section>
+          )}
+
           {/* Drag overlay */}
           {isDragging && (
             <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center bg-blue-50/70 backdrop-blur-[2px]">
@@ -876,7 +905,7 @@ export default function Chat() {
                   </div>
                   <div className="mt-4">
                     <div className="text-3xl font-semibold tracking-tight text-foreground">
-                      {result.confidence}%
+                      <CountUp value={result.confidence} suffix="%" duration={1100} />
                     </div>
                     <div className="text-xs font-medium text-muted-foreground">
                       Model Confidence
@@ -925,7 +954,7 @@ export default function Chat() {
                   </div>
                   {/* mini probability viz */}
                   <div className="space-y-1.5">
-                    {distribution.slice(0, 3).map((d) => (
+                    {distribution.slice(0, 3).map((d, i) => (
                       <div key={d.stage} className="flex items-center gap-2">
                         <span className="w-16 text-[10px] text-muted-foreground">
                           Stage {d.stage}
@@ -933,10 +962,13 @@ export default function Chat() {
                         <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
                           <div
                             className={cn(
-                              "h-full rounded-full",
+                              "h-full rounded-full transition-all duration-700 ease-out",
                               d.stage === result.dr_stage ? "bg-blue-500" : "bg-slate-300",
                             )}
-                            style={{ width: `${Math.max(d.pct, 1.5)}%` }}
+                            style={{
+                              width: `${Math.max(d.pct, 1.5)}%`,
+                              transitionDelay: `${i * 120}ms`,
+                            }}
                           />
                         </div>
                         <span className="nb-mono w-10 text-right text-[10px] text-muted-foreground">
@@ -1042,8 +1074,8 @@ export default function Chat() {
                     <img
                       src={`/assets/gradcam/${result.gradcam_image}`}
                       alt="Grad-CAM attention overlay"
-                      className="pointer-events-none absolute inset-0 h-full w-full object-contain opacity-70"
-                      style={{ transform: `scale(${zoom})` }}
+                      className="pointer-events-none absolute inset-0 h-full w-full object-contain anim-fade-slow"
+                      style={{ transform: `scale(${zoom})`, opacity: 0.72 }}
                     />
                   )}
                   {viewMode === "attention" && (
@@ -1056,15 +1088,19 @@ export default function Chat() {
             </section>
           )}
 
-          {/* Detected retinal findings */}
+          {/* Detected retinal findings — staggered reveal */}
           {result && (
             <section>
               <h2 className="mb-3 text-sm font-semibold text-foreground">
                 Detected Retinal Findings
               </h2>
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                {findings.map((f) => (
-                  <div key={f.name} className="panel p-4">
+                {findings.map((f, i) => (
+                  <div
+                    key={f.name}
+                    className="panel anim-rise nb-pop-hover p-4"
+                    style={{ animationDelay: `${i * 90}ms` }}
+                  >
                     <div className="flex items-center justify-between">
                       <span className="flex size-8 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
                         <ScanEye className="size-4" />
@@ -1090,10 +1126,13 @@ export default function Chat() {
                       <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
                         <div
                           className={cn(
-                            "h-full rounded-full",
+                            "h-full rounded-full transition-all duration-700 ease-out",
                             f.detected ? "bg-blue-500" : "bg-slate-300",
                           )}
-                          style={{ width: `${f.conf}%` }}
+                          style={{
+                            width: `${f.conf}%`,
+                            transitionDelay: `${i * 90 + 250}ms`,
+                          }}
                         />
                       </div>
                       <span className="nb-mono text-[10px] text-muted-foreground">
@@ -1106,47 +1145,28 @@ export default function Chat() {
             </section>
           )}
 
-          {/* DR stage probability */}
+          {/* DR stage probability — interactive severity bars */}
           {result && (
             <section className="panel p-5">
-              <h2 className="text-sm font-semibold text-foreground">
-                DR Stage Probability
-              </h2>
+              <div className="flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-foreground">
+                  DR Stage Probability
+                </h2>
+                <Tooltip label="Model softmax output over the 5-class DR severity scale">
+                  <span className="cursor-help rounded-full border bg-muted/60 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                    i
+                  </span>
+                </Tooltip>
+              </div>
               <div className="mt-4 space-y-2.5">
-                {distribution.map((d) => (
-                  <div key={d.stage} className="flex items-center gap-3">
-                    <span
-                      className={cn(
-                        "w-36 shrink-0 text-xs",
-                        d.stage === result.dr_stage
-                          ? "font-semibold text-foreground"
-                          : "text-muted-foreground",
-                      )}
-                    >
-                      Stage {d.stage} — {d.name}
-                    </span>
-                    <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-muted">
-                      <div
-                        className={cn(
-                          "h-full rounded-full transition-all duration-500",
-                          d.stage === result.dr_stage
-                            ? "bg-blue-500"
-                            : "bg-slate-300",
-                        )}
-                        style={{ width: `${Math.max(d.pct, 0.5)}%` }}
-                      />
-                    </div>
-                    <span
-                      className={cn(
-                        "nb-mono w-14 text-right text-xs",
-                        d.stage === result.dr_stage
-                          ? "font-semibold text-blue-600"
-                          : "text-muted-foreground",
-                      )}
-                    >
-                      {d.pct}%
-                    </span>
-                  </div>
+                {distribution.map((d, i) => (
+                  <SeverityBar
+                    key={d.stage}
+                    name={`Stage ${d.stage} — ${d.name}`}
+                    pct={d.pct}
+                    active={d.stage === result.dr_stage}
+                    delay={i * 100}
+                  />
                 ))}
               </div>
             </section>
@@ -1259,10 +1279,11 @@ export default function Chat() {
                 Evidence
               </p>
               <div className="mt-4 space-y-2.5">
-                {RAG_SOURCES.map((src) => (
+                {RAG_SOURCES.map((src, i) => (
                   <div
                     key={src.title}
-                    className="rounded-lg border bg-muted/30 p-3.5 transition-colors hover:bg-muted/60"
+                    className="anim-rise rounded-lg border bg-muted/30 p-3.5 transition-colors hover:bg-muted/60"
+                    style={{ animationDelay: `${i * 80}ms` }}
                   >
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <span className="text-[13px] font-semibold text-foreground">
@@ -1284,8 +1305,11 @@ export default function Chat() {
                     <div className="mt-2 flex items-center gap-3">
                       <div className="h-1.5 w-32 overflow-hidden rounded-full bg-border">
                         <div
-                          className="h-full rounded-full bg-blue-500"
-                          style={{ width: `${src.score}%` }}
+                          className="h-full rounded-full bg-blue-500 transition-all duration-700 ease-out"
+                          style={{
+                            width: `${src.score}%`,
+                            transitionDelay: `${i * 80 + 300}ms`,
+                          }}
                         />
                       </div>
                       <span className="nb-mono text-[10px] text-muted-foreground">
@@ -1474,7 +1498,7 @@ export default function Chat() {
                 )}
                 {busy && (
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <Loader2 className="size-3.5 animate-spin" />
+                    <TypingDots />
                     thinking...
                   </div>
                 )}
@@ -1547,7 +1571,7 @@ export default function Chat() {
             </form>
           </section>
 
-          {/* Technical status strip */}
+          {/* Technical status strip — live service indicators */}
           <div className="flex flex-wrap items-center gap-2 px-1">
             {[
               ["Model", "DR Vision Model"],
@@ -1567,6 +1591,7 @@ export default function Chat() {
               <span className="size-1.5 rounded-full bg-emerald-500" />
               Verified
             </span>
+            <ServiceHealth compact />
           </div>
         </div>
 

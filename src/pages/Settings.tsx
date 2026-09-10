@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { AppShell, PageHeader } from "@/components/AppShell";
+import { ServiceHealth } from "@/components/premium";
 import {
   Bell,
   BrainCircuit,
@@ -781,9 +782,15 @@ function SystemSection() {
       title="System Status"
       description="Live health of all pipeline services."
     >
+      <div className="mb-4 flex items-center justify-between rounded-lg border bg-muted/30 px-4 py-3">
+        <span className="text-xs font-medium text-muted-foreground">
+          Live service indicators
+        </span>
+        <ServiceHealth />
+      </div>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {services.map((s) => (
-          <div key={s.name} className="rounded-lg border bg-muted/30 p-4">
+          <div key={s.name} className="rounded-lg border bg-muted/30 p-4 transition-colors hover:bg-muted/60">
             <div className="flex items-center justify-between">
               <span className="flex size-8 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
                 <s.icon className="size-4" />
