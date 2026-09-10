@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import logoMark from "@/assets/logo.svg";
 import { AppShell, CaseHistoryTable, PageHeader } from "@/components/AppShell";
+import { GaugeRing, RetinaArt } from "@/components/graphics";
 import { RichText } from "@/components/RichText";
 import {
   AIProcessing,
@@ -216,6 +217,34 @@ const STAGES: Stage[] = [
 ];
 
 const TOTAL_STAGES = STAGES.length;
+
+/** Demo case library — synthetic fundus previews, click-to-screen. */
+const DEMO_CASES = [
+  {
+    key: "eyescan1",
+    stage: 0,
+    label: "No DR",
+    blurb: "Clear fundus, no lesions — routine annual screening continues.",
+    tint: "from-emerald-50/80 to-teal-50/40",
+    chip: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  },
+  {
+    key: "eyescan2",
+    stage: 2,
+    label: "Moderate NPDR",
+    blurb: "Microaneurysms, hemorrhages and hard exudates — referable.",
+    tint: "from-amber-50/80 to-orange-50/40",
+    chip: "border-amber-200 bg-amber-50 text-amber-700",
+  },
+  {
+    key: "eyescan3",
+    stage: 4,
+    label: "Proliferative DR",
+    blurb: "Neovascularization at the disc — urgent referral flagged.",
+    tint: "from-rose-50/80 to-red-50/40",
+    chip: "border-red-200 bg-red-50 text-red-700",
+  },
+];
 
 const SUGGESTED_PROMPTS = [
   "Why was this classified as Stage 2?",
@@ -480,6 +509,7 @@ export default function Chat() {
   const [isDragging, setIsDragging] = useState(false);
   const [result, setResult] = useState<MatchedResult | null>(null);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [demoStage, setDemoStage] = useState<number | null>(null);
   const [viewMode, setViewMode] = useState<"original" | "attention" | "compare">("original");
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
@@ -570,8 +600,8 @@ export default function Chat() {
   /* Screening inside the chat                                         */
   /* ---------------------------------------------------------------- */
 
-  const handleFile = useCallback(
-    (file: File) => {
+  const runScreeningFlow = useCallback(
+    (filename: string, blobUrl: string | null, demo: number | null) => {
       if (isRunning) return;
       clearTimers();
       setIsRunning(true);
@@ -580,10 +610,14 @@ export default function Chat() {
       setZoom(1);
       setPan({ x: 0, y: 0 });
       setComparePos(50);
+      setDemoStage(demo);
 
-      const url = URL.createObjectURL(file);
-      setImageUrl(url);
-      pushEntry({ kind: "user-image", name: file.name, url });
+      setImageUrl(blobUrl);
+      if (blobUrl) {
+        pushEntry({ kind: "user-image", name: filename, url: blobUrl });
+      } else {
+        pushEntry({ kind: "user-text", text: `Run demo case: ${filename}` });
+      }
       const pipelineId = pushEntry({
         kind: "pipeline",
         statuses: Array(TOTAL_STAGES).fill("pending") as StageStatus[],
@@ -595,7 +629,7 @@ export default function Chat() {
       // is awaited at the reveal. A hard 40s timeout + catch guarantee the
       // guaranteed report is used if the action hangs or fails.
       const fetchPromise = Promise.race([
-        runScreening({ filename: file.name }),
+        runScreening({ filename }),
         new Promise<MatchedResult>((resolve) =>
           setTimeout(() => resolve(guaranteedResult()), 40000),
         ),
@@ -650,21 +684,31 @@ export default function Chat() {
           if (!data.matched) {
             // Should be unreachable (backend falls back to a demo case),
             // but guarantee the report even here.
-            streamReport(guaranteedResult(), file.name);
+            streamReport(guaranteedResult(), filename);
             toast.success("Screening complete", {
               description: "AI assessment ready — Moderate NPDR (demo case).",
             });
             return;
           }
 
-          streamReport(data, file.name);
+          streamReport(data, filename);
           toast.success("Screening complete", {
             description: `AI assessment ready — Stage ${data.dr_stage} · ${data.confidence}% confidence.`,
           });
         }, elapsed),
       );
     },
-    [addResult, clearTimers, isRunning],
+    [addResult, clearTimers, isRunning, pushEntry],
+  );
+
+  const handleFile = useCallback(
+    (file: File) => runScreeningFlow(file.name, URL.createObjectURL(file), null),
+    [runScreeningFlow],
+  );
+
+  const runDemoCase = useCallback(
+    (key: string, stage: number) => runScreeningFlow(`${key}.png`, null, stage),
+    [runScreeningFlow],
   );
 
   /* ---------------------------------------------------------------- */
@@ -771,6 +815,7 @@ export default function Chat() {
     setIsRunning(false);
     setResult(null);
     setImageUrl(null);
+    setDemoStage(null);
     setViewMode("original");
     setZoom(1);
     setPan({ x: 0, y: 0 });
@@ -791,6 +836,9 @@ export default function Chat() {
   const endPan = () => {
     panRef.current = null;
   };
+
+  /* Demo-mode fundus visual when no file was uploaded. */
+  const demoFundus = imageUrl ? null : demoStage;
 
   /* ---------------------------------------------------------------- */
   /* Derived render data                                               */
@@ -959,6 +1007,59 @@ export default function Chat() {
             </button>
           )}
 
+          {/* Demo case gallery — click-to-screen with synthetic fundus previews */}
+          {!imageUrl && !isRunning && (
+            <section>
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-foreground">
+                  Demo Case Library
+                </h2>
+                <span className="text-xs text-muted-foreground">
+                  one click to run the full pipeline
+                </span>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-3">
+                {DEMO_CASES.map((c, i) => (
+                  <button
+                    key={c.key}
+                    type="button"
+                    disabled={isRunning}
+                    onClick={() => runDemoCase(c.key, c.stage)}
+                    className={cn(
+                      "panel anim-rise nb-pop-hover group flex cursor-pointer flex-col items-start gap-2 bg-gradient-to-br p-4 text-left transition-all disabled:opacity-50",
+                      c.tint,
+                    )}
+                    style={{ animationDelay: `${i * 80}ms` }}
+                  >
+                    <div className="relative w-full overflow-hidden rounded-lg border">
+                      <RetinaArt stage={c.stage} className="h-24 w-full transition-transform duration-300 group-hover:scale-[1.04]" />
+                      <span
+                        className={cn(
+                          "absolute right-1.5 top-1.5 rounded-full border px-2 py-0.5 text-[10px] font-semibold",
+                          c.chip,
+                        )}
+                      >
+                        {c.label}
+                      </span>
+                    </div>
+                    <div className="flex w-full items-center justify-between">
+                      <span className="nb-mono text-[11px] font-medium text-muted-foreground">
+                        {c.key}
+                      </span>
+                      <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-600 transition-transform duration-200 group-hover:translate-x-0.5">
+                        Run screening
+                        <Sparkles className="size-3" />
+                      </span>
+                    </div>
+                    <p className="text-[11px] leading-relaxed text-muted-foreground">
+                      {c.blurb}
+                    </p>
+                  </button>
+                ))}
+              </div>
+            </section>
+          )}
+
           {/* Elegant AI processing + skeletons while the pipeline runs */}
           {isRunning && (
             <section className="panel nb-pop p-6">
@@ -1021,6 +1122,21 @@ export default function Chat() {
                         : " NPDR"}
                   </div>
                   <div className="mt-4 flex items-end gap-6">
+                    <GaugeRing
+                      value={result.confidence}
+                      size={92}
+                      strokeWidth={9}
+                      className="text-muted"
+                    >
+                      <div className="text-center leading-none">
+                        <div className="text-lg font-semibold tracking-tight text-foreground">
+                          <CountUp value={result.confidence} suffix="%" duration={1100} />
+                        </div>
+                        <div className="mt-0.5 text-[9px] font-medium uppercase tracking-wide text-muted-foreground">
+                          confidence
+                        </div>
+                      </div>
+                    </GaugeRing>
                     <div>
                       <div className="text-3xl font-semibold tracking-tight text-foreground">
                         <CountUp value={result.confidence} suffix="%" duration={1100} />
@@ -1138,7 +1254,7 @@ export default function Chat() {
           )}
 
           {/* Retinal image analysis */}
-          {imageUrl && (
+          {(imageUrl || demoFundus !== null) && (
             <section className="panel nb-pop overflow-hidden">
               <div className="flex flex-wrap items-center justify-between gap-3 border-b px-5 py-3.5">
                 <h2 className="text-sm font-semibold text-foreground">
@@ -1222,21 +1338,37 @@ export default function Chat() {
                   ref={compareRef}
                   className="relative aspect-[4/3] w-full max-w-[32rem] select-none overflow-hidden rounded-lg border bg-black"
                 >
-                  {/* Original image (base layer) */}
-                  <img
-                    src={imageUrl}
-                    alt="Uploaded fundus image"
-                    className={cn(
-                      "absolute inset-0 h-full w-full object-contain transition-transform duration-150",
-                      zoom > 1 && viewMode !== "compare" && "cursor-grab active:cursor-grabbing",
-                    )}
-                    style={{ transform: `scale(${zoom}) translate(${pan.x}px, ${pan.y}px)` }}
-                    onPointerDown={startPan}
-                    onPointerMove={movePan}
-                    onPointerUp={endPan}
-                    onPointerLeave={endPan}
-                    draggable={false}
-                  />
+                  {/* Original image (base layer) — uploaded file or synthetic demo fundus */}
+                  {imageUrl ? (
+                    <img
+                      src={imageUrl}
+                      alt="Uploaded fundus image"
+                      className={cn(
+                        "absolute inset-0 h-full w-full object-contain transition-transform duration-150",
+                        zoom > 1 && viewMode !== "compare" && "cursor-grab active:cursor-grabbing",
+                      )}
+                      style={{ transform: `scale(${zoom}) translate(${pan.x}px, ${pan.y}px)` }}
+                      onPointerDown={startPan}
+                      onPointerMove={movePan}
+                      onPointerUp={endPan}
+                      onPointerLeave={endPan}
+                      draggable={false}
+                    />
+                  ) : (
+                    <div
+                      className={cn(
+                        "absolute inset-0 transition-transform duration-150",
+                        zoom > 1 && viewMode !== "compare" && "cursor-grab active:cursor-grabbing",
+                      )}
+                      style={{ transform: `scale(${zoom}) translate(${pan.x}px, ${pan.y}px)` }}
+                      onPointerDown={startPan}
+                      onPointerMove={movePan}
+                      onPointerUp={endPan}
+                      onPointerLeave={endPan}
+                    >
+                      <RetinaArt stage={demoStage ?? 2} className="h-full w-full" />
+                    </div>
+                  )}
                   {/* AI attention layer — full overlay or clipped by the compare divider */}
                   {viewMode !== "original" && result && (
                     <img
@@ -1255,6 +1387,11 @@ export default function Chat() {
                   {viewMode === "attention" && (
                     <span className="absolute left-2 top-2 rounded-md bg-black/60 px-2 py-0.5 text-[10px] font-medium text-white">
                       Grad-CAM · Explainability Heatmap
+                    </span>
+                  )}
+                  {!imageUrl && (
+                    <span className="absolute right-2 top-2 rounded-md bg-black/60 px-2 py-0.5 text-[10px] font-medium text-white">
+                      Demo case · synthetic fundus
                     </span>
                   )}
                   {viewMode === "compare" && (
