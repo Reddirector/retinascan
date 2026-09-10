@@ -409,6 +409,11 @@ export default function Chat() {
 
   useEffect(() => clearTimers, [clearTimers]);
 
+  // Keep the latest chat message in view while conversing.
+  useEffect(() => {
+    threadEndRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, [entries.length, busy]);
+
   type DistributiveOmit<T, K extends PropertyKey> = T extends unknown
     ? Omit<T, K>
     : never;
@@ -797,7 +802,12 @@ export default function Chat() {
                     </span>
                   </div>
                   <div className="mt-1 text-lg font-medium text-blue-700">
-                    {result.dr_label} {result.dr_stage === 0 ? "" : "NPDR".replace("NPDR", result.dr_stage >= 4 ? "DR" : "NPDR")}
+                    {result.dr_label}
+                    {result.dr_stage === 0
+                      ? ""
+                      : result.dr_stage >= 4
+                        ? " DR"
+                        : " NPDR"}
                   </div>
                   <div className="mt-4">
                     <div className="text-3xl font-semibold tracking-tight text-foreground">
@@ -1274,26 +1284,41 @@ export default function Chat() {
           {/* Full streamed AI report (structured, preserved functionality) */}
           {reportEntry && (
             <section className="panel overflow-hidden">
-              <button
-                type="button"
-                onClick={() => setShowReport((s) => !s)}
-                className="flex w-full cursor-pointer items-center justify-between border-b px-5 py-3.5"
-              >
-                <h2 className="text-sm font-semibold text-foreground">
+              <div className="flex items-center justify-between gap-3 border-b px-5 py-3">
+                <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
                   Full AI Report
-                  <span className="ml-2 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                  <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
                     {reportEntry.result.report_source === "ai"
                       ? "live model"
                       : "template"}
                   </span>
                 </h2>
-                <ChevronDown
-                  className={cn(
-                    "size-4 text-muted-foreground transition-transform",
-                    showReport && "rotate-180",
-                  )}
-                />
-              </button>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void navigator.clipboard?.writeText(reportEntry.result.report);
+                    }}
+                    className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border bg-card px-2.5 py-1.5 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                  >
+                    <FileText className="size-3" />
+                    Copy
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowReport((s) => !s)}
+                    className="cursor-pointer rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-muted"
+                    aria-label={showReport ? "Collapse report" : "Expand report"}
+                  >
+                    <ChevronDown
+                      className={cn(
+                        "size-4 transition-transform",
+                        showReport && "rotate-180",
+                      )}
+                    />
+                  </button>
+                </div>
+              </div>
               {showReport && (
                 <div
                   aria-live="polite"
@@ -1449,12 +1474,9 @@ export default function Chat() {
                   type="button"
                   onClick={handleClear}
                   disabled={busy}
-                  className="cursor-pointer rounded-lg p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
-                  aria-label="Clear conversation"
+                  className="cursor-pointer rounded-lg px-2.5 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
                 >
-                  <ChevronDown className="hidden" />
-                  <User className="hidden" />
-                  <span className="text-xs font-medium">Clear</span>
+                  Clear
                 </button>
               )}
             </form>
