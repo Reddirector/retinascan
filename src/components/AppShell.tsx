@@ -22,9 +22,9 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { label: "New Screening", icon: ScanEye, to: "/chat", enabled: true },
   { label: "Screening History", icon: History, to: "/dashboard", enabled: true },
-  { label: "Patients", icon: Users, to: "/patients", enabled: false },
-  { label: "Reports", icon: FileText, to: "/reports", enabled: false },
-  { label: "Settings", icon: Settings, to: "/settings", enabled: false },
+  { label: "Patients", icon: Users, to: "/patients", enabled: true },
+  { label: "Reports", icon: FileText, to: "/reports", enabled: true },
+  { label: "Settings", icon: Settings, to: "/settings", enabled: true },
 ];
 
 /** Severity color scale — soft, badge-style solid tints. */
@@ -221,6 +221,30 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             aria-label="Screening History"
           >
             <History className="size-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate("/patients")}
+            className="cursor-pointer rounded-lg p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            aria-label="Patients"
+          >
+            <Users className="size-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate("/reports")}
+            className="cursor-pointer rounded-lg p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            aria-label="Reports"
+          >
+            <FileText className="size-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate("/settings")}
+            className="cursor-pointer rounded-lg p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            aria-label="Settings"
+          >
+            <Settings className="size-4" />
           </button>
           <button
             type="button"
