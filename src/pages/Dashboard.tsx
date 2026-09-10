@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
 import { AppShell, DrStageBadge, PageHeader } from "@/components/AppShell";
 import { useScreeningHistory } from "@/context/ScreeningHistoryContext";
-import { ArrowUpDown, Search, ScanEye } from "lucide-react";
+import { ArrowUpDown, Search } from "lucide-react";
+import logoMark from "@/assets/logo.svg";
 import { CountUp } from "@/components/premium";
 import { cn } from "@/lib/utils";
 
@@ -158,8 +159,8 @@ export default function Dashboard() {
           <div className="panel p-8 text-center">
             {history.length === 0 ? (
               <>
-                <span className="mx-auto flex size-12 items-center justify-center rounded-full bg-primary/10 text-primary">
-                  <ScanEye className="size-6" />
+                <span className="mx-auto flex size-12 items-center justify-center rounded-full bg-primary/10">
+                  <img src={logoMark} alt="" className="size-7" />
                 </span>
                 <p className="mt-4 text-sm text-muted-foreground">
                   No screenings yet this session. Run eyescan1 / eyescan2 /

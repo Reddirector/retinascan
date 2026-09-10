@@ -45,6 +45,7 @@ import {
 } from "@/components/ui/breadcrumb";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import logoMark from "@/assets/logo.svg";
 
 interface NavItem {
   label: string;
@@ -421,9 +422,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           onClick={() => navigate("/")}
           className="mb-8 flex cursor-pointer items-center gap-3 px-2 text-left"
         >
-          <div className="btn-grad flex size-10 items-center justify-center rounded-xl text-white shadow-sm">
-            <ScanEye className="size-5" />
-          </div>
+          <img
+            src={logoMark}
+            alt="RetinaScan AI"
+            className="size-10 rounded-xl shadow-sm"
+          />
           <div className="leading-tight">
             <div className="text-[15px] font-semibold tracking-tight">
               RetinaScan AI
@@ -513,9 +516,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           onClick={() => navigate("/")}
           className="flex cursor-pointer items-center gap-2"
         >
-          <div className="btn-grad flex size-8 items-center justify-center rounded-lg text-white">
-            <ScanEye className="size-4" />
-          </div>
+          <img
+            src={logoMark}
+            alt="RetinaScan AI"
+            className="size-8 rounded-lg"
+          />
           <span className="text-sm font-semibold tracking-tight">
             RetinaScan AI
           </span>

@@ -1,7 +1,7 @@
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { ScanEye } from "lucide-react";
 import { useNavigate } from "react-router";
+import logoMark from "@/assets/logo.svg";
 
 export default function NotFound() {
   const navigate = useNavigate();
@@ -12,9 +12,7 @@ export default function NotFound() {
       transition={{ duration: 0.4 }}
       className="flex min-h-screen flex-col items-center justify-center gap-6 bg-background px-4 text-foreground"
     >
-      <div className="flex size-12 items-center justify-center border-2 bg-primary text-primary-foreground">
-        <ScanEye className="size-6" />
-      </div>
+      <img src={logoMark} alt="RetinaScan AI" className="size-12 rounded-xl shadow-sm" />
       <div className="nb-border nb-pop bg-card px-8 py-6 text-center">
         <h1 className="nb-mono text-5xl font-bold tracking-tight">404</h1>
         <p className="mt-2 text-sm text-muted-foreground">

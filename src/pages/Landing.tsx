@@ -12,6 +12,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { useNavigate } from "react-router";
+import logoMark from "@/assets/logo.svg";
 
 const PIPELINE_PREVIEW = [
   { label: "Intake & Quality Gate", icon: ScanEye },
@@ -44,9 +45,11 @@ export default function Landing() {
             onClick={() => navigate("/")}
             className="flex cursor-pointer items-center gap-2"
           >
-            <div className="flex size-9 items-center justify-center border-2 bg-primary text-primary-foreground">
-              <ScanEye className="size-5" />
-            </div>
+            <img
+              src={logoMark}
+              alt="RetinaScan AI"
+              className="size-9 rounded-lg shadow-sm"
+            />
             <div className="leading-tight">
               <div className="text-sm font-bold tracking-tight">RetinaScan</div>
               <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">

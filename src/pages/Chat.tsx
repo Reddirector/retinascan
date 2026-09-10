@@ -23,6 +23,7 @@ import {
   Sparkles,
   type LucideIcon,
 } from "lucide-react";
+import logoMark from "@/assets/logo.svg";
 import { AppShell, CaseHistoryTable, PageHeader } from "@/components/AppShell";
 import { RichText } from "@/components/RichText";
 import {
@@ -940,8 +941,8 @@ export default function Chat() {
               onClick={() => fileInputRef.current?.click()}
               className="panel nb-pop-hover flex w-full cursor-pointer flex-col items-center gap-3 border-dashed bg-card px-6 py-12 text-center transition-colors hover:border-blue-300 hover:bg-blue-50/40"
             >
-              <span className="flex size-12 items-center justify-center rounded-full bg-gradient-to-br from-blue-100 to-teal-100 text-blue-600">
-                <ScanEye className="size-6" />
+              <span className="flex size-12 items-center justify-center rounded-full bg-gradient-to-br from-blue-100 to-teal-100">
+                <img src={logoMark} alt="" className="size-7" />
               </span>
               <div>
                 <p className="text-sm font-semibold text-foreground">
@@ -974,8 +975,8 @@ export default function Chat() {
           {isDragging && (
             <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center bg-blue-50/70 backdrop-blur-[2px]">
               <div className="rounded-xl border-2 border-dashed border-blue-300 bg-white px-8 py-6 text-center shadow-lg">
-                <span className="mx-auto flex size-10 items-center justify-center rounded-full bg-blue-50 text-blue-500">
-                  <ScanEye className="size-5" />
+                <span className="mx-auto flex size-10 items-center justify-center rounded-full bg-white">
+                  <img src={logoMark} alt="" className="size-6" />
                 </span>
                 <p className="mt-3 text-sm font-semibold text-blue-700">
                   Drop fundus image to run screening
