@@ -21,6 +21,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { AppShell, PageHeader } from "@/components/AppShell";
+import { RichText } from "@/components/RichText";
 import { ChatMessage, useScreeningHistory } from "@/context/ScreeningHistoryContext";
 import { api } from "@/convex/_generated/api";
 import { cn } from "@/lib/utils";
@@ -245,14 +246,6 @@ function guaranteedResult(): MatchedResult {
   };
 }
 
-/** Render markdown **bold** in a (possibly still-streaming) text chunk. */
-function renderBold(text: string) {
-  const parts = text.split("**");
-  return parts.map((part, i) =>
-    i % 2 === 1 ? <strong key={i}>{part}</strong> : <span key={i}>{part}</span>,
-  );
-}
-
 /* ------------------------------------------------------------------ */
 /* Derived clinical display data (presentation only)                   */
 /* ------------------------------------------------------------------ */
@@ -344,6 +337,37 @@ const REASONING_FLOW = [
   { label: "Verification", detail: "Model output, evidence and logic were cross-checked." },
   { label: "Final Assessment", detail: "Stage assignment and referral decision were issued." },
 ];
+
+/* ------------------------------------------------------------------ */
+/* Structured report rendering (word-budget streaming preserved)       */
+/* ------------------------------------------------------------------ */
+
+/** Total word count of the full report text. */
+function reportWordCount(text: string): number {
+  return text.trim() ? text.trim().split(/\s+/).length : 0;
+}
+
+/**
+ * Full report rendered as clean structured blocks (headings, key-value
+ * rows, bullets) with the existing word-by-word streaming preserved.
+ */
+function StructuredReportStreamed({
+  text,
+  shownWords,
+}: {
+  text: string;
+  shownWords: number;
+}) {
+  const total = reportWordCount(text);
+  const streaming = shownWords < total;
+  return (
+    <RichText
+      text={text}
+      wordLimit={shownWords}
+      streaming={streaming}
+    />
+  );
+}
 
 /* ------------------------------------------------------------------ */
 /* Page                                                                */
@@ -1247,7 +1271,7 @@ export default function Chat() {
             </section>
           )}
 
-          {/* Full streamed AI report (preserved functionality) */}
+          {/* Full streamed AI report (structured, preserved functionality) */}
           {reportEntry && (
             <section className="panel overflow-hidden">
               <button
@@ -1273,18 +1297,12 @@ export default function Chat() {
               {showReport && (
                 <div
                   aria-live="polite"
-                  className="max-h-96 overflow-y-auto whitespace-pre-wrap px-5 py-4 text-[13px] leading-6 text-foreground"
+                  className="max-h-[32rem] overflow-y-auto px-5 py-4"
                 >
-                  {renderBold(
-                    reportEntry.result.report
-                      .split(/\s+/)
-                      .slice(0, reportEntry.shownWords)
-                      .join(" "),
-                  )}
-                  {reportEntry.shownWords <
-                    reportEntry.result.report.split(/\s+/).length && (
-                    <span className="text-blue-500">▌</span>
-                  )}
+                  <StructuredReportStreamed
+                    text={reportEntry.result.report}
+                    shownWords={reportEntry.shownWords}
+                  />
                 </div>
               )}
             </section>
@@ -1355,9 +1373,12 @@ export default function Chat() {
                       <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
                         <Bot className="size-3" />
                       </span>
-                      <p className="max-w-[85%] rounded-2xl rounded-tl-sm bg-muted px-3.5 py-2 text-sm leading-relaxed text-foreground">
-                        {e.text}
-                      </p>
+                      <div className="max-w-[85%] rounded-2xl rounded-tl-sm bg-muted px-3.5 py-3">
+                        <RichText
+                          text={e.text}
+                          className="text-[13px] leading-relaxed"
+                        />
+                      </div>
                     </div>
                   ),
                 )}
