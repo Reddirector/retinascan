@@ -6,6 +6,10 @@ import { defineConfig } from "vite";
 
 // https://vite.dev/config/
 export default defineConfig({
+  // Base path for GitHub Pages (project site). Adjust to the repository name so
+  // built assets are referenced from `/retinascan/` instead of the site root.
+  base: "/retinascan/",
+
   plugins: [react(), vlyPlugin(), tailwindcss()],
   resolve: {
     alias: {
