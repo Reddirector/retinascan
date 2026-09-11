@@ -24,7 +24,7 @@ jobs:
 
     env:
         VITE_CONVEX_URL: ${{ secrets.VITE_CONVEX_URL }}
-        CONVEX_DEPLOYMENT: secret-hawk-990
+        CONVEX_DEPLOYMENT: efficient-kingfisher-899
         CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
         CONVEX_SITE_URL: https://secret-hawk-990.convex.site
         VLY_CONVEX_AUTH_ISSUER: https://freebuff.com
