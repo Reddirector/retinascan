@@ -87,6 +87,15 @@ class RootErrorBoundary extends React.Component<
 
 const convex = new ConvexReactClient(import.meta.env.VITE_CONVEX_URL as string);
 
+function PreferenceBootstrap() {
+  useEffect(() => {
+    const theme = localStorage.getItem("rs.theme") ?? "Light";
+    const dark = theme === "Dark" || (theme === "System" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+    document.documentElement.classList.toggle("dark", dark);
+    document.documentElement.classList.toggle("high-contrast", theme === "High Contrast");
+  }, []);
+  return null;
+}
 
 
 function RouteSyncer() {
@@ -120,16 +129,14 @@ createRoot(document.getElementById("root")!).render(
         <VlyToolbar />
       </ToolbarErrorBoundary>
       <ConvexAuthProvider client={convex}>
+        <PreferenceBootstrap />
         <ScreeningHistoryProvider>
           <BrowserRouter>
             <RouteSyncer />
             <Suspense fallback={<RouteLoading />}>
               <Routes>
                 <Route path="/" element={<Landing />} />
-                <Route
-                  path="/auth"
-                  element={<AuthPage redirectAfterAuth="/chat" />}
-                />
+                <Route path="/auth" element={<AuthPage />} />
                 <Route
                   path="/dashboard"
                   element={

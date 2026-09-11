@@ -114,11 +114,11 @@ export function HealthDot({
 export function ServiceHealth({ compact = false }: { compact?: boolean }) {
   const services = [
     { name: "Vision Model", detail: "effnet-b0-dr · inference online" },
-    { name: "SGLang", detail: "runtime serving 3 models" },
-    { name: "RAG", detail: "hybrid retrieval · reranker active" },
-    { name: "ChromaDB", detail: "96,412 vectors indexed" },
-    { name: "Supabase", detail: "database · 12ms p50 latency" },
-    { name: "API", detail: "gateway · 0 errors last hour" },
+    { name: "Reasoning", detail: "multi-agent orchestration · online" },
+    { name: "Evidence (RAG)", detail: "clinical guideline retrieval · online" },
+    { name: "Verification", detail: "cross-check & contradiction detection · online" },
+    { name: "Database", detail: "Convex · connected" },
+    { name: "API Gateway", detail: "screening & chat actions · online" },
   ];
   if (compact) {
     return (
@@ -203,12 +203,11 @@ export function Skeleton({ className }: { className?: string }) {
 export function AIProcessing({ label }: { label?: string }) {
   return (
     <div className="flex flex-col items-center gap-3 py-2">
-      <div className="relative size-14">
-        <span className="absolute inset-0 rounded-full border border-blue-200/70" />
-        <span className="absolute inset-0 rounded-full border-t-2 border-blue-500 anim-orbit" />
-        <span className="absolute inset-2 rounded-full border-t-2 border-teal-400/80 anim-orbit" style={{ animationDirection: "reverse", animationDuration: "1.8s" }} />
+      <div className="relative size-12">
+        <span className="absolute inset-0 rounded-full border-2 border-blue-100" />
+        <span className="absolute inset-0 rounded-full border-2 border-transparent border-t-blue-500 anim-orbit" />
         <span className="absolute inset-0 flex items-center justify-center">
-          <span className="size-2.5 rounded-full bg-blue-500 anim-breathe" />
+          <span className="size-1.5 rounded-full bg-blue-500" />
         </span>
       </div>
       {label && (

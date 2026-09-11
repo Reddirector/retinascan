@@ -26,7 +26,10 @@ interface AuthProps {
 
 function resolveRedirectAfterAuth(
   returnTo: string | null,
-  fallback = "/dashboard",
+  fallback = (() => {
+    const chosen = localStorage.getItem("rs.defaultDashboard");
+    return ({ "New Screening": "/chat", "Screening History": "/dashboard", Patients: "/patients", Reports: "/reports" } as Record<string, string>)[chosen ?? ""] ?? "/chat";
+  })(),
 ) {
   if (returnTo?.startsWith("/") && !returnTo.startsWith("//")) {
     return returnTo;

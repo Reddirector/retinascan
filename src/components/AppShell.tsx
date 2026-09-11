@@ -10,7 +10,6 @@ import {
   Settings,
   Users,
   Bell,
-  ChevronRight,
   CalendarClock,
   CircleCheck,
   UserRound,
@@ -45,6 +44,7 @@ import {
 } from "@/components/ui/breadcrumb";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { useUiLanguage } from "@/lib/uiLanguage";
 import logoMark from "@/assets/logo.svg";
 
 interface NavItem {
@@ -61,6 +61,15 @@ const NAV_ITEMS: NavItem[] = [
   { label: "Reports", icon: FileText, to: "/reports", enabled: true },
   { label: "Settings", icon: Settings, to: "/settings", enabled: true },
 ];
+
+function formatPreferredDate(date: Date, includeWeekday = false) {
+  const format = localStorage.getItem("rs.dateFormat") ?? "DD-MM-YYYY";
+  const day = String(date.getDate()).padStart(2, "0");
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const year = date.getFullYear();
+  const value = format === "DD/MM/YYYY" ? `${day}/${month}/${year}` : format === "MM/DD/YYYY" ? `${month}/${day}/${year}` : format === "YYYY-MM-DD" ? `${year}-${month}-${day}` : `${day}-${month}-${year}`;
+  return includeWeekday ? `${date.toLocaleDateString(undefined, { weekday: "short" })} · ${value}` : value;
+}
 
 /** Severity color scale — soft, badge-style solid tints. */
 export function drStageClasses(stage: number, referable: boolean): string {
@@ -101,6 +110,7 @@ const CRUMB_LABELS: Record<string, string> = {
 
 /** Breadcrumb trail: Home / Current page. */
 export function PageBreadcrumbs() {
+  const t = useUiLanguage();
   const location = useLocation();
   const current = CRUMB_LABELS[location.pathname];
   return (
@@ -109,7 +119,7 @@ export function PageBreadcrumbs() {
         <CrumbItem>
           <BreadcrumbLink asChild>
             <Link to="/chat" className="transition-colors hover:text-blue-600">
-              Home
+              {t("New Screening")}
             </Link>
           </BreadcrumbLink>
         </CrumbItem>
@@ -118,7 +128,7 @@ export function PageBreadcrumbs() {
             <BreadcrumbSeparator />
             <CrumbItem>
               <BreadcrumbPage className="font-medium">
-                {current}
+                {t(current)}
               </BreadcrumbPage>
             </CrumbItem>
           </>
@@ -155,8 +165,8 @@ const NOTIFICATIONS = [
   },
   {
     id: "n3",
-    title: "Knowledge base synced",
-    detail: "ChromaDB re-indexed 96,412 vectors · 0 errors",
+    title: "Clinical evidence base synced",
+    detail: "Guideline and literature index refreshed for retrieval",
     time: "1 h ago",
     tone: "ok" as const,
   },
@@ -164,9 +174,12 @@ const NOTIFICATIONS = [
 
 /** Top header: global search (⌘K), AI status, live clock, notifications, profile. */
 export function TopHeader({ onOpenPalette }: { onOpenPalette: () => void }) {
+  const t = useUiLanguage();
   const now = useNow();
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
+  const [unread, setUnread] = useState(() => new Set(NOTIFICATIONS.map((n) => n.id)));
+  const notificationTarget = (id: string) => (id === "n2" ? "/reports" : id === "n1" ? "/dashboard" : "/settings");
 
   const handleSignOut = async () => {
     await signOut();
@@ -193,17 +206,13 @@ export function TopHeader({ onOpenPalette }: { onOpenPalette: () => void }) {
             <span className="absolute inline-flex size-full rounded-full bg-emerald-500 anim-ping-soft" />
             <span className="relative inline-flex size-1.5 rounded-full bg-emerald-500" />
           </span>
-          AI System Online
+          {t("AI System Online")}
         </span>
 
         {/* Date & time */}
         <span className="hidden items-center gap-1.5 text-xs text-muted-foreground lg:inline-flex">
           <CalendarClock className="size-3.5" />
-          {now.toLocaleDateString(undefined, {
-            weekday: "short",
-            month: "short",
-            day: "numeric",
-          })}
+          {formatPreferredDate(now, true)}
           {" · "}
           {now.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}
         </span>
@@ -218,18 +227,20 @@ export function TopHeader({ onOpenPalette }: { onOpenPalette: () => void }) {
                 aria-label="Notifications"
               >
                 <Bell className="size-4" />
-                <span className="absolute right-1.5 top-1.5 size-2 rounded-full border-2 border-sidebar bg-blue-500" />
+                {unread.size > 0 && <span className="absolute right-1.5 top-1.5 size-2 rounded-full border-2 border-sidebar bg-blue-500" />}
               </button>
             </PopoverTrigger>
             <PopoverContent align="end" className="w-80 rounded-xl p-0">
               <div className="border-b px-4 py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Notifications
+                {t("Notifications")}
               </div>
               <div className="max-h-72 overflow-y-auto">
                 {NOTIFICATIONS.map((n) => (
-                  <div
+                  <button
                     key={n.id}
-                    className="flex gap-2.5 border-b px-4 py-3 transition-colors last:border-b-0 hover:bg-muted/50"
+                    type="button"
+                    onClick={() => { setUnread((current) => { const next = new Set(current); next.delete(n.id); return next; }); navigate(notificationTarget(n.id)); }}
+                    className={cn("flex w-full gap-2.5 border-b px-4 py-3 text-left transition-colors last:border-b-0 hover:bg-muted/50", unread.has(n.id) && "bg-blue-50/30")}
                   >
                     <span
                       className={cn(
@@ -256,15 +267,15 @@ export function TopHeader({ onOpenPalette }: { onOpenPalette: () => void }) {
                         {n.time}
                       </span>
                     </div>
-                  </div>
+                  </button>
                 ))}
               </div>
               <button
                 type="button"
-                onClick={() => toast.success("All notifications marked as read")}
+                onClick={() => { setUnread(new Set()); toast.success("All notifications marked as read"); }}
                 className="w-full cursor-pointer border-t px-4 py-2.5 text-xs font-medium text-blue-600 transition-colors hover:bg-blue-50"
               >
-                Mark all as read
+                {t("Mark all as read")}
               </button>
             </PopoverContent>
           </Popover>
@@ -355,11 +366,7 @@ export function PageHeader({
         <div className="hidden text-right sm:block">
           <div className="nb-mono text-xs text-muted-foreground">{caseId}</div>
           <div className="text-xs text-muted-foreground">
-            {now.toLocaleDateString(undefined, {
-              month: "short",
-              day: "numeric",
-              year: "numeric",
-            })}{" "}
+            {formatPreferredDate(now)}{" "}
             ·{" "}
             {now.toLocaleTimeString(undefined, {
               hour: "2-digit",
@@ -377,6 +384,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
   const location = useLocation();
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const t = useUiLanguage();
 
   // Global ⌘K / Ctrl+K command palette
   useEffect(() => {
@@ -463,7 +471,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   )}
                 />
                 <item.icon className="size-4 transition-transform duration-200 group-hover:scale-110" />
-                {item.label}
+                {t(item.label)}
               </button>
             );
           })}

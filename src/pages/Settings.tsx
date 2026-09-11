@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { ServiceHealth } from "@/components/premium";
 import {
@@ -28,6 +28,7 @@ import {
   Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 type SectionId =
   | "general"
@@ -280,17 +281,19 @@ function SelectInput({
   );
 }
 
-function SaveBar() {
+function SaveBar({ onSave, onDiscard }: { onSave?: () => void; onDiscard?: () => void }) {
   return (
     <div className="flex items-center justify-end gap-2 border-t pt-4">
       <button
         type="button"
+        onClick={onDiscard}
         className="cursor-pointer rounded-lg border bg-card px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
       >
         Discard
       </button>
       <button
         type="button"
+        onClick={onSave}
         className="cursor-pointer rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
       >
         Save Changes
@@ -304,11 +307,28 @@ function SaveBar() {
 /* ------------------------------------------------------------------ */
 
 function GeneralSection() {
-  const [appName, setAppName] = useState("RetinaScan AI");
-  const [language, setLanguage] = useState("English (US)");
-  const [dateFormat, setDateFormat] = useState("MMM D, YYYY");
-  const [theme, setTheme] = useState("Light (Clinical)");
-  const [dashboard, setDashboard] = useState("New Screening");
+  const [appName, setAppName] = useState(() => localStorage.getItem("rs.appName") ?? "RetinaScan AI");
+  const [language, setLanguage] = useState(() => localStorage.getItem("rs.language") ?? "English");
+  const [dateFormat, setDateFormat] = useState(() => localStorage.getItem("rs.dateFormat") ?? "DD-MM-YYYY");
+  const [theme, setTheme] = useState(() => localStorage.getItem("rs.theme") ?? "Light");
+  const [dashboard, setDashboard] = useState(() => localStorage.getItem("rs.defaultDashboard") ?? "New Screening");
+  const applyTheme = (value: string) => {
+    const root = document.documentElement;
+    root.classList.toggle("dark", value === "Dark" || (value === "System" && window.matchMedia("(prefers-color-scheme: dark)").matches));
+    root.classList.toggle("high-contrast", value === "High Contrast");
+  };
+
+  useEffect(() => applyTheme(theme), [theme]);
+  const save = () => {
+    localStorage.setItem("rs.appName", appName);
+    localStorage.setItem("rs.language", language);
+    localStorage.setItem("rs.dateFormat", dateFormat);
+    localStorage.setItem("rs.theme", theme);
+    localStorage.setItem("rs.defaultDashboard", dashboard);
+    applyTheme(theme);
+    window.dispatchEvent(new Event("rs-preferences"));
+    toast.success("Preferences saved", { description: "Your display and workspace preferences will be used on future visits." });
+  };
 
   return (
     <Card title="General" description="Core application preferences.">
@@ -322,7 +342,7 @@ function GeneralSection() {
             <SelectInput
               value={language}
               onChange={setLanguage}
-              options={["English (US)", "English (UK)", "Deutsch", "Français", "हिन्दी"]}
+              options={["English", "English (UK)", "Dutch", "French", "Hindi"]}
             />
           </span>
         </SettingRow>
@@ -330,7 +350,7 @@ function GeneralSection() {
           <SelectInput
             value={dateFormat}
             onChange={setDateFormat}
-            options={["MMM D, YYYY", "DD/MM/YYYY", "MM/DD/YYYY", "YYYY-MM-DD"]}
+            options={["DD-MM-YYYY", "DD/MM/YYYY", "MM/DD/YYYY", "YYYY-MM-DD"]}
           />
         </SettingRow>
         <SettingRow label="Theme">
@@ -339,7 +359,7 @@ function GeneralSection() {
             <SelectInput
               value={theme}
               onChange={setTheme}
-              options={["Light (Clinical)", "System", "High Contrast"]}
+              options={["Light", "Dark", "System", "High Contrast"]}
             />
           </span>
         </SettingRow>
@@ -358,7 +378,7 @@ function GeneralSection() {
         </SettingRow>
       </div>
       <div className="mt-4">
-        <SaveBar />
+        <SaveBar onSave={save} onDiscard={() => window.location.reload()} />
       </div>
     </Card>
   );
@@ -644,6 +664,22 @@ const ROLE_USERS = [
 ];
 
 function UsersSection() {
+  const [users, setUsers] = useState(ROLE_USERS);
+  const [adding, setAdding] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newEmail, setNewEmail] = useState("");
+  const [newRole, setNewRole] = useState("Clinician");
+  const updateUser = (email: string, patch: Partial<(typeof ROLE_USERS)[number]>) =>
+    setUsers((current) => current.map((user) => user.email === email ? { ...user, ...patch } : user));
+  const addUser = () => {
+    if (!newName.trim() || !newEmail.trim()) {
+      toast.error("Enter a name and email address to add a demo user.");
+      return;
+    }
+    setUsers((current) => [...current, { name: newName.trim(), email: newEmail.trim(), role: newRole, status: "Active" }]);
+    setAdding(false); setNewName(""); setNewEmail(""); setNewRole("Clinician");
+    toast.success("Demo user added", { description: "This change is local to this browser session." });
+  };
   return (
     <div className="space-y-6">
       <Card title="Users & Roles" description="Workspace membership and permissions.">
@@ -681,17 +717,24 @@ function UsersSection() {
         <div className="mt-5 flex justify-end">
           <button
             type="button"
+            onClick={() => setAdding((open) => !open)}
             className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
           >
             <UserPlus className="size-3.5" />
             Add User
           </button>
         </div>
+        {adding && <div className="mt-4 grid gap-2 rounded-lg border bg-muted/30 p-3 sm:grid-cols-[1fr_1fr_auto_auto]">
+          <TextInput value={newName} onChange={setNewName} width="w-full" />
+          <TextInput value={newEmail} onChange={setNewEmail} width="w-full" />
+          <SelectInput value={newRole} onChange={setNewRole} options={["Administrator", "Ophthalmologist", "Clinician", "Screening Operator"]} />
+          <button type="button" onClick={addUser} className="rounded-lg bg-primary px-3 py-2 text-xs font-medium text-primary-foreground">Add</button>
+        </div>}
       </Card>
 
       <Card title="Workspace Members">
         <div className="space-y-1">
-          {ROLE_USERS.map((u) => (
+          {users.map((u) => (
             <div
               key={u.email}
               className="flex flex-wrap items-center justify-between gap-3 border-b py-3 last:border-b-0 last:pb-0"
@@ -706,9 +749,7 @@ function UsersSection() {
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <span className="rounded-full border bg-card px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
-                  {u.role}
-                </span>
+                <select aria-label={`Role for ${u.name}`} value={u.role} onChange={(e) => { updateUser(u.email, { role: e.target.value }); toast.success("Demo role updated"); }} className="rounded-full border bg-card px-2 py-1 text-[11px] font-medium text-muted-foreground outline-none"><option>Administrator</option><option>Ophthalmologist</option><option>Clinician</option><option>Screening Operator</option></select>
                 <span
                   className={cn(
                     "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold",
@@ -721,12 +762,14 @@ function UsersSection() {
                 </span>
                 <button
                   type="button"
+                  onClick={() => toast.success("Choose a role from the selector.")}
                   className="cursor-pointer rounded-lg border bg-card px-2.5 py-1.5 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                 >
                   Edit Role
                 </button>
                 <button
                   type="button"
+                  onClick={() => { const next = u.status === "Active" ? "Disabled" : "Active"; updateUser(u.email, { status: next }); toast.success(`${u.name} ${next === "Active" ? "enabled" : "disabled"} for this demo.`); }}
                   className={cn(
                     "cursor-pointer rounded-lg border px-2.5 py-1.5 text-[11px] font-medium transition-colors",
                     u.status === "Active"

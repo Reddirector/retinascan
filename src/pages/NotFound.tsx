@@ -22,7 +22,7 @@ export default function NotFound() {
       <Button
         type="button"
         onClick={() => navigate("/")}
-        className="nb-pop-hover cursor-pointer rounded-none border-2 font-semibold"
+        className="nb-pop-hover btn-grad cursor-pointer font-semibold text-primary-foreground transition-[filter] hover:brightness-105"
       >
         Back to home
       </Button>

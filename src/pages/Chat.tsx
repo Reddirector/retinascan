@@ -31,7 +31,6 @@ import {
   AIProcessing,
   CountUp,
   ServiceHealth,
-  Skeleton,
   SeverityBar,
   Tooltip,
   TypingDots,
@@ -41,6 +40,7 @@ import { ChatMessage, useScreeningHistory } from "@/context/ScreeningHistoryCont
 import { api } from "@/convex/_generated/api";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { useUiLanguage } from "@/lib/uiLanguage";
 
 /* ------------------------------------------------------------------ */
 /* Types                                                               */
@@ -61,6 +61,10 @@ interface MatchedResult {
 }
 
 type StageStatus = "pending" | "active" | "complete";
+
+function HandoffItem({ label, value, tone }: { label: string; value: string; tone: string }) {
+  return <div className="min-w-0 px-4 py-3"><div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</div><div className={cn("mt-1 truncate text-xs font-semibold", tone)} title={value}>{value}</div></div>;
+}
 
 interface StageAccent {
   chip: string;
@@ -498,6 +502,7 @@ function StructuredReportStreamed({
 /* ------------------------------------------------------------------ */
 
 export default function Chat() {
+  const t = useUiLanguage();
   const sendChat = useAction(api.screening.chat);
   const runScreening = useAction(api.screening.screen);
   const { addResult, history } = useScreeningHistory();
@@ -517,6 +522,12 @@ export default function Chat() {
   const [showTrace, setShowTrace] = useState(false);
   const [showReport, setShowReport] = useState(true);
   const [showEvidencePanel, setShowEvidencePanel] = useState(true);
+  // Local, session-only clinician sign-off on the current result. Purely a
+  // frontend affordance — nothing is persisted to the backend. Distinguishes
+  // "AI assessment" / "pipeline verification" from an actual human decision.
+  const [clinicianDecision, setClinicianDecision] = useState<
+    "pending" | "confirmed" | "flagged"
+  >("pending");
 
   const nextIdRef = useRef(1);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -611,6 +622,7 @@ export default function Chat() {
       setPan({ x: 0, y: 0 });
       setComparePos(50);
       setDemoStage(demo);
+      setClinicianDecision("pending");
 
       setImageUrl(blobUrl);
       if (blobUrl) {
@@ -806,6 +818,7 @@ export default function Chat() {
     setIsDragging(false);
     const file = e.dataTransfer.files?.[0];
     if (file && file.type.startsWith("image/")) handleFile(file);
+    else if (file) toast.error("Please upload a fundus image before starting the screening.");
   };
 
   const handleClear = () => {
@@ -821,6 +834,7 @@ export default function Chat() {
     setPan({ x: 0, y: 0 });
     setComparePos(50);
     lastReportRef.current = null;
+    setClinicianDecision("pending");
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
@@ -857,6 +871,10 @@ export default function Chat() {
 
   const distribution = result ? stageDistribution(result.confidence, result.dr_stage) : [];
   const findings = result ? findingsFor(result.dr_stage) : [];
+  const activeStageIndex = pipelineEntry
+    ? pipelineEntry.statuses.findIndex((s) => s === "active")
+    : -1;
+  const activeStage = activeStageIndex >= 0 ? STAGES[activeStageIndex] : null;
 
   return (
     <AppShell>
@@ -870,9 +888,29 @@ export default function Chat() {
         {/* -------------------------- MAIN WORKSPACE -------------------------- */}
         <div className="min-w-0 flex-1 space-y-6">
           <PageHeader
-            title="New Retinal Screening"
-            subtitle="AI-assisted diabetic retinopathy assessment"
+            title={t("New Retinal Screening")}
+            subtitle={t("AI-assisted diabetic retinopathy assessment")}
           />
+
+          {result && (
+            <section className="panel nb-pop overflow-hidden">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b bg-muted/30 px-5 py-3">
+                <div>
+                  <h2 className="text-sm font-semibold text-foreground">{t("Clinical handoff")}</h2>
+                  <p className="mt-0.5 text-[11px] text-muted-foreground">Screening summary for clinician review — detailed evidence follows below.</p>
+                </div>
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700"><ShieldCheck className="size-3.5" />{t("Verification")}</span>
+              </div>
+              <div className="grid divide-y sm:grid-cols-3 sm:divide-x sm:divide-y-0 lg:grid-cols-6">
+                <HandoffItem label={t("Image")} value={imageUrl ? "Fundus photo received" : "Demo fundus case"} tone="text-foreground" />
+                <HandoffItem label={t("Quality")} value="Acceptable" tone="text-emerald-700" />
+                <HandoffItem label={t("Analysis")} value={`Stage ${result.dr_stage} · ${result.dr_label}`} tone="text-foreground" />
+                <HandoffItem label="Confidence" value={`${result.confidence}%`} tone="text-blue-700" />
+                <HandoffItem label={t("Evidence")} value="Visual + clinical sources" tone="text-foreground" />
+                <HandoffItem label={t("Clinician review")} value={clinicianDecision === "pending" ? "Decision pending" : clinicianDecision === "confirmed" ? "Confirmed" : "Flagged for review"} tone={clinicianDecision === "confirmed" ? "text-emerald-700" : "text-amber-700"} />
+              </div>
+            </section>
+          )}
 
           {/* Pipeline stepper */}
           {pipelineEntry && (
@@ -984,9 +1022,11 @@ export default function Chat() {
           )}
 
           {/* Upload zone (before first image / always available while idle) */}
-          {!imageUrl && !isRunning && (            <button
-              type="button"
+          {!imageUrl && !isRunning && (            <div
+              role="button"
+              tabIndex={0}
               onClick={() => fileInputRef.current?.click()}
+              onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") fileInputRef.current?.click(); }}
               className="panel nb-pop-hover flex w-full cursor-pointer flex-col items-center gap-3 border-dashed bg-card px-6 py-12 text-center transition-colors hover:border-blue-300 hover:bg-blue-50/40"
             >
               <span className="flex size-12 items-center justify-center rounded-full bg-gradient-to-br from-blue-100 to-teal-100">
@@ -1004,10 +1044,17 @@ export default function Chat() {
                 <Sparkles className="size-3 text-blue-500" />
                 Demo files: eyescan1 · eyescan2 · eyescan3
               </span>
-            </button>
+              <button
+                type="button"
+                onClick={(event) => { event.stopPropagation(); toast.error("Please upload a fundus image before starting the screening."); }}
+                className="rounded-lg border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              >
+                Start screening
+              </button>
+            </div>
           )}
 
-          {/* Demo case gallery — click-to-screen with synthetic fundus previews */}
+          {/* Demo case gallery — three real clinical cases at different DR severities */}
           {!imageUrl && !isRunning && (
             <section>
               <div className="mb-3 flex items-center justify-between">
@@ -1015,7 +1062,7 @@ export default function Chat() {
                   Demo Case Library
                 </h2>
                 <span className="text-xs text-muted-foreground">
-                  one click to run the full pipeline
+                  select a case to run the full pipeline
                 </span>
               </div>
               <div className="grid gap-3 sm:grid-cols-3">
@@ -1025,49 +1072,52 @@ export default function Chat() {
                     type="button"
                     disabled={isRunning}
                     onClick={() => runDemoCase(c.key, c.stage)}
-                    className={cn(
-                      "panel anim-rise nb-pop-hover group flex cursor-pointer flex-col items-start gap-2 bg-gradient-to-br p-4 text-left transition-all disabled:opacity-50",
-                      c.tint,
-                    )}
+                    className="panel anim-rise nb-pop-hover group flex cursor-pointer flex-col items-start gap-3 overflow-hidden p-0 text-left transition-all disabled:opacity-50"
                     style={{ animationDelay: `${i * 80}ms` }}
                   >
-                    <div className="relative w-full overflow-hidden rounded-lg border">
-                      <RetinaArt stage={c.stage} className="h-24 w-full transition-transform duration-300 group-hover:scale-[1.04]" />
+                    <div className="relative w-full overflow-hidden border-b">
+                      <RetinaArt stage={c.stage} className="h-32 w-full transition-transform duration-300 group-hover:scale-[1.04]" />
+                      <span className="absolute left-2 top-2 rounded-md bg-black/55 px-1.5 py-0.5 text-[10px] font-medium text-white">
+                        Case {String(i + 1).padStart(2, "0")}
+                      </span>
                       <span
                         className={cn(
-                          "absolute right-1.5 top-1.5 rounded-full border px-2 py-0.5 text-[10px] font-semibold",
+                          "absolute right-2 top-2 rounded-full border px-2 py-0.5 text-[10px] font-semibold",
                           c.chip,
                         )}
                       >
                         {c.label}
                       </span>
                     </div>
-                    <div className="flex w-full items-center justify-between">
-                      <span className="nb-mono text-[11px] font-medium text-muted-foreground">
+                    <div className="flex w-full flex-1 flex-col gap-2 px-4 pb-4">
+                      <span className="nb-mono text-[10px] font-medium text-muted-foreground">
                         {c.key}
                       </span>
-                      <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-600 transition-transform duration-200 group-hover:translate-x-0.5">
+                      <p className="flex-1 text-[12px] leading-relaxed text-muted-foreground">
+                        {c.blurb}
+                      </p>
+                      <span className="inline-flex items-center gap-1.5 self-start rounded-md bg-primary/10 px-2.5 py-1 text-[11px] font-semibold text-primary transition-transform duration-200 group-hover:translate-x-0.5">
                         Run screening
                         <Sparkles className="size-3" />
                       </span>
                     </div>
-                    <p className="text-[11px] leading-relaxed text-muted-foreground">
-                      {c.blurb}
-                    </p>
                   </button>
                 ))}
               </div>
             </section>
           )}
 
-          {/* Elegant AI processing + skeletons while the pipeline runs */}
+          {/* Live processing readout — reflects the real active stage, not a decorative skeleton */}
           {isRunning && (
-            <section className="panel nb-pop p-6">
-              <AIProcessing label="Analyzing retinal image — pipeline in progress" />
-              <div className="mt-5 space-y-2.5">
-                <Skeleton className="h-3.5 w-3/4" />
-                <Skeleton className="h-3.5 w-1/2" />
-                <Skeleton className="h-3.5 w-2/3" />
+            <section className="panel nb-pop flex flex-col items-center gap-3 p-8 text-center">
+              <AIProcessing />
+              <div>
+                <p className="text-sm font-semibold text-foreground">
+                  {activeStage ? activeStage.label : "Starting pipeline…"}
+                </p>
+                <p className="nb-mono mt-1 text-xs text-muted-foreground">
+                  {pipelineEntry?.activeLine ?? "Preparing analysis…"}
+                </p>
               </div>
             </section>
           )}
@@ -1089,85 +1139,286 @@ export default function Chat() {
             </div>
           )}
 
-          {/* Diagnosis hero card */}
-          {result && (
-            <section className="panel nb-pop p-6">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <h2 className="text-base font-semibold text-foreground">
-                  AI Screening Assessment
-                </h2>
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">
-                  <ShieldCheck className="size-3.5" />
-                  VERIFIED AI RESULT
-                </span>
-              </div>
-
-              <div className="mt-5 grid gap-6 lg:grid-cols-[1fr_auto_1fr]">
-                {/* Left: stage + confidence */}
-                <div>
-                  <div className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-                    Predicted Stage
+          {/* Screening result — image (primary) + clinical assessment (secondary),
+             a single balanced composition once a case is running or complete. */}
+          {(imageUrl || demoFundus !== null || result) && (
+            <div className="grid gap-5 lg:grid-cols-5">
+              {/* LEFT — retinal image + Grad-CAM explanation, the clinical input */}
+              {(imageUrl || demoFundus !== null) && (
+                <section
+                  className={cn(
+                    "panel nb-pop overflow-hidden",
+                    result ? "lg:col-span-3" : "lg:col-span-5",
+                  )}
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-b px-5 py-3.5">
+                    <div>
+                      <h2 className="text-sm font-semibold text-foreground">
+                        Retinal Image Analysis
+                      </h2>
+                      <p className="text-[11px] text-muted-foreground">
+                        {viewMode === "attention"
+                          ? "Grad-CAM: regions that most influenced the model's prediction"
+                          : viewMode === "compare"
+                            ? "Drag the divider to compare the original image against AI attention"
+                            : "Original fundus photograph submitted for screening"}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      {/* quality overlay */}
+                      <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-medium text-emerald-700">
+                        <span className="size-1.5 rounded-full bg-emerald-500" />
+                        Image Quality: GOOD · Gradable
+                      </span>
+                      {/* toggle */}
+                      <div className="flex overflow-hidden rounded-lg border text-xs font-medium">
+                        <button
+                          type="button"
+                          onClick={() => setViewMode("original")}
+                          className={cn(
+                            "cursor-pointer px-3 py-1.5 transition-colors",
+                            viewMode === "original"
+                              ? "bg-primary text-primary-foreground"
+                              : "bg-card text-muted-foreground hover:bg-muted",
+                          )}
+                        >
+                          Original
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setViewMode("attention")}
+                          disabled={!result}
+                          className={cn(
+                            "cursor-pointer px-3 py-1.5 transition-colors disabled:cursor-not-allowed disabled:opacity-40",
+                            viewMode === "attention"
+                              ? "bg-primary text-primary-foreground"
+                              : "bg-card text-muted-foreground hover:bg-muted",
+                          )}
+                        >
+                          Grad-CAM
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setViewMode("compare")}
+                          disabled={!result}
+                          className={cn(
+                            "cursor-pointer px-3 py-1.5 transition-colors disabled:cursor-not-allowed disabled:opacity-40",
+                            viewMode === "compare"
+                              ? "bg-primary text-primary-foreground"
+                              : "bg-card text-muted-foreground hover:bg-muted",
+                          )}
+                        >
+                          Compare
+                        </button>
+                      </div>
+                      {/* zoom */}
+                      <div className="flex items-center gap-1 rounded-lg border">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const next = Math.max(1, zoom - 0.25);
+                            setZoom(next);
+                            if (next === 1) setPan({ x: 0, y: 0 });
+                          }}
+                          className="cursor-pointer rounded-l-lg p-1.5 text-muted-foreground transition-colors hover:bg-muted"
+                          aria-label="Zoom out"
+                        >
+                          <Minimize2 className="size-3.5" />
+                        </button>
+                        <span className="nb-mono w-10 text-center text-[10px] text-muted-foreground">
+                          {Math.round(zoom * 100)}%
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setZoom((z) => Math.min(2, z + 0.25))}
+                          className="cursor-pointer rounded-r-lg p-1.5 text-muted-foreground transition-colors hover:bg-muted"
+                          aria-label="Zoom in"
+                        >
+                          <Maximize2 className="size-3.5" />
+                        </button>
+                      </div>
+                    </div>
                   </div>
-                  <div className="mt-1 flex items-baseline gap-3">
-                    <span className="text-4xl font-semibold tracking-tight text-foreground">
-                      STAGE {result.dr_stage}
+                  <div className="flex items-center justify-center bg-slate-50 p-4">
+                    <div
+                      ref={compareRef}
+                      className="relative aspect-[4/3] w-full max-w-[32rem] select-none overflow-hidden rounded-lg border bg-black"
+                    >
+                      {/* Original image (base layer) — uploaded file or synthetic demo fundus */}
+                      {imageUrl ? (
+                        <img
+                          src={imageUrl}
+                          alt="Uploaded fundus image"
+                          className={cn(
+                            "absolute inset-0 h-full w-full object-contain transition-transform duration-150",
+                            zoom > 1 && viewMode !== "compare" && "cursor-grab active:cursor-grabbing",
+                          )}
+                          style={{ transform: `scale(${zoom}) translate(${pan.x}px, ${pan.y}px)` }}
+                          onPointerDown={startPan}
+                          onPointerMove={movePan}
+                          onPointerUp={endPan}
+                          onPointerLeave={endPan}
+                          draggable={false}
+                        />
+                      ) : (
+                        <div
+                          className={cn(
+                            "absolute inset-0 transition-transform duration-150",
+                            zoom > 1 && viewMode !== "compare" && "cursor-grab active:cursor-grabbing",
+                          )}
+                          style={{ transform: `scale(${zoom}) translate(${pan.x}px, ${pan.y}px)` }}
+                          onPointerDown={startPan}
+                          onPointerMove={movePan}
+                          onPointerUp={endPan}
+                          onPointerLeave={endPan}
+                        >
+                          <RetinaArt stage={demoStage ?? 2} className="h-full w-full" />
+                        </div>
+                      )}
+                      {/* AI attention layer — full overlay or clipped by the compare divider */}
+                      {viewMode !== "original" && result && (
+                        <img
+                          src={`/assets/gradcam/${result.gradcam_image}`}
+                          alt="Grad-CAM attention overlay"
+                          className="pointer-events-none absolute inset-0 h-full w-full object-contain anim-fade-slow"
+                          style={{
+                            transform: `scale(${zoom}) translate(${pan.x}px, ${pan.y}px)`,
+                            opacity: viewMode === "compare" ? 0.85 : 0.72,
+                            clipPath:
+                              viewMode === "compare" ? `inset(0 0 0 ${comparePos}%)` : undefined,
+                          }}
+                          draggable={false}
+                        />
+                      )}
+                      {viewMode === "attention" && (
+                        <span className="absolute left-2 top-2 rounded-md bg-black/60 px-2 py-0.5 text-[10px] font-medium text-white">
+                          Grad-CAM · explanation aid, not proof of diagnosis
+                        </span>
+                      )}
+                      {!imageUrl && (
+                        <span className="absolute right-2 top-2 rounded-md bg-black/60 px-2 py-0.5 text-[10px] font-medium text-white">
+                          Demo case · synthetic fundus
+                        </span>
+                      )}
+                      {viewMode === "compare" && (
+                        <>
+                          <div
+                            className="absolute inset-y-0 z-10 w-px bg-white/90"
+                            style={{ left: `${comparePos}%` }}
+                          />
+                          <button
+                            type="button"
+                            aria-label="Drag to compare original and AI attention views"
+                            className="absolute top-1/2 z-20 flex size-8 -translate-x-1/2 -translate-y-1/2 cursor-ew-resize items-center justify-center rounded-full border border-white/70 bg-white/90 text-slate-700 shadow-md transition-transform hover:scale-105"
+                            style={{ left: `${comparePos}%` }}
+                            onPointerDown={(e) => {
+                              e.currentTarget.setPointerCapture(e.pointerId);
+                              compareDragRef.current = true;
+                            }}
+                            onPointerMove={(e) => {
+                              if (!compareDragRef.current) return;
+                              const rect = compareRef.current?.getBoundingClientRect();
+                              if (!rect) return;
+                              const pct = ((e.clientX - rect.left) / rect.width) * 100;
+                              setComparePos(Math.min(94, Math.max(6, pct)));
+                            }}
+                            onPointerUp={() => {
+                              compareDragRef.current = false;
+                            }}
+                          >
+                            <MoveHorizontal className="size-4" />
+                          </button>
+                          <span className="absolute bottom-2 left-2 rounded-md bg-black/60 px-2 py-0.5 text-[10px] font-medium text-white">
+                            Original
+                          </span>
+                          <span className="absolute bottom-2 right-2 rounded-md bg-black/60 px-2 py-0.5 text-[10px] font-medium text-white">
+                            AI Attention
+                          </span>
+                        </>
+                      )}
+                      {zoom > 1 && viewMode !== "compare" && (
+                        <span className="absolute bottom-2 left-1/2 -translate-x-1/2 rounded-md bg-black/60 px-2 py-0.5 text-[10px] font-medium text-white">
+                          Drag to pan
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </section>
+              )}
+
+              {/* RIGHT — clinical assessment: what the AI concluded, how sure it is,
+                 and what the clinician should do next */}
+              {result && (
+                <section className="panel nb-pop flex flex-col p-6 lg:col-span-2">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <h2 className="text-sm font-semibold text-foreground">
+                      AI Screening Assessment
+                    </h2>
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700">
+                      <ShieldCheck className="size-3.5" />
+                      Pipeline Verified
                     </span>
                   </div>
-                  <div className="mt-1 text-lg font-medium text-blue-700">
-                    {result.dr_label}
-                    {result.dr_stage === 0
-                      ? ""
-                      : result.dr_stage >= 4
-                        ? " DR"
-                        : " NPDR"}
+
+                  <div className="mt-4 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                    Predicted Stage
                   </div>
-                  <div className="mt-4 flex items-end gap-6">
+                  <div className="mt-1 flex items-baseline gap-2">
+                    <span className="text-3xl font-semibold tracking-tight text-foreground">
+                      STAGE {result.dr_stage}
+                    </span>
+                    <span className="text-base font-medium text-blue-700">
+                      {result.dr_label}
+                      {result.dr_stage === 0
+                        ? ""
+                        : result.dr_stage >= 4
+                          ? " DR"
+                          : " NPDR"}
+                    </span>
+                  </div>
+
+                  <div className="mt-4 flex items-center gap-5 border-y py-4">
                     <GaugeRing
                       value={result.confidence}
-                      size={92}
-                      strokeWidth={9}
+                      size={76}
+                      strokeWidth={8}
                       className="text-muted"
                     >
                       <div className="text-center leading-none">
-                        <div className="text-lg font-semibold tracking-tight text-foreground">
+                        <div className="text-base font-semibold tracking-tight text-foreground">
                           <CountUp value={result.confidence} suffix="%" duration={1100} />
                         </div>
-                        <div className="mt-0.5 text-[9px] font-medium uppercase tracking-wide text-muted-foreground">
+                        <div className="mt-0.5 text-[8px] font-medium uppercase tracking-wide text-muted-foreground">
                           confidence
                         </div>
                       </div>
                     </GaugeRing>
-                    <div>
-                      <div className="text-3xl font-semibold tracking-tight text-foreground">
-                        <CountUp value={result.confidence} suffix="%" duration={1100} />
+                    <div className="flex-1 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-muted-foreground">Model confidence</span>
+                        <span className="text-sm font-semibold text-foreground">
+                          <CountUp value={result.confidence} suffix="%" duration={1100} />
+                        </span>
                       </div>
-                      <div className="text-xs font-medium text-muted-foreground">
-                        Model Confidence
+                      <div className="flex items-center justify-between">
+                        <Tooltip label="Complement of model confidence — residual prediction uncertainty">
+                          <span className="cursor-help text-xs text-muted-foreground underline decoration-dotted">
+                            Uncertainty
+                          </span>
+                        </Tooltip>
+                        <span className="text-sm font-semibold text-slate-500">
+                          <CountUp
+                            value={Math.round((100 - result.confidence) * 10) / 10}
+                            decimals={1}
+                            suffix="%"
+                            duration={1100}
+                          />
+                        </span>
                       </div>
-                    </div>
-                    <div>
-                      <div className="text-3xl font-semibold tracking-tight text-slate-500">
-                        <CountUp
-                          value={Math.round((100 - result.confidence) * 10) / 10}
-                          decimals={1}
-                          suffix="%"
-                          duration={1100}
-                        />
-                      </div>
-                      <Tooltip label="Complement of model confidence — residual prediction uncertainty">
-                        <div className="w-fit cursor-help text-xs font-medium text-muted-foreground">
-                          Uncertainty ⓘ
-                        </div>
-                      </Tooltip>
                     </div>
                   </div>
-                </div>
 
-                <div className="hidden w-px bg-border lg:block" />
-
-                {/* Right: referral + probability viz */}
-                <div className="flex flex-col justify-between gap-4">
-                  <div>
+                  <div className="mt-4">
                     <div className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
                       Referral Status
                     </div>
@@ -1191,19 +1442,61 @@ export default function Chat() {
                         </>
                       )}
                     </div>
-                    <div className="mt-3 text-xs text-muted-foreground">
-                      Severity:{" "}
-                      <span className="font-medium text-foreground">
-                        {result.dr_stage === 0
-                          ? "No retinopathy"
-                          : result.dr_stage >= 4
-                            ? "Sight-threatening"
-                            : "Referable"}
-                      </span>
-                    </div>
                   </div>
-                  {/* mini probability viz */}
-                  <div className="space-y-1.5">
+
+                  {/* Clinician review — session-local sign-off, distinct from the AI's
+                     own output and from internal pipeline verification. */}
+                  <div className="mt-4 rounded-lg border p-3.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                        Clinician Review
+                      </span>
+                      {clinicianDecision === "pending" && (
+                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-600">
+                          <Dot className="size-4 -mx-1" />
+                          Awaiting review
+                        </span>
+                      )}
+                      {clinicianDecision === "confirmed" && (
+                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600">
+                          <CircleCheck className="size-3.5" />
+                          Confirmed
+                        </span>
+                      )}
+                      {clinicianDecision === "flagged" && (
+                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-red-600">
+                          <CircleAlert className="size-3.5" />
+                          Flagged for second opinion
+                        </span>
+                      )}
+                    </div>
+                    {clinicianDecision === "pending" ? (
+                      <div className="mt-2.5 flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setClinicianDecision("confirmed")}
+                          className="nb-pop-hover cursor-pointer rounded-md border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 transition-colors hover:bg-emerald-100"
+                        >
+                          Confirm assessment
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setClinicianDecision("flagged")}
+                          className="nb-pop-hover cursor-pointer rounded-md border px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:bg-muted"
+                        >
+                          Flag for second opinion
+                        </button>
+                      </div>
+                    ) : (
+                      <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">
+                        Recorded for this session only — the AI output above is unchanged.
+                        RetinaScan assists the read; the clinician's decision is final.
+                      </p>
+                    )}
+                  </div>
+
+                  {/* mini probability preview — full breakdown below in DR Stage Probability */}
+                  <div className="mt-4 space-y-1.5">
                     {distribution.slice(0, 3).map((d, i) => (
                       <div key={d.stage} className="flex items-center gap-2">
                         <span className="w-16 text-[10px] text-muted-foreground">
@@ -1235,209 +1528,22 @@ export default function Chat() {
                       </div>
                     ))}
                   </div>
-                </div>
-              </div>
 
-              <p className="mt-5 border-t pt-4 text-sm leading-relaxed text-muted-foreground">
-                AI screening indicates retinal findings consistent with{" "}
-                <span className="font-medium text-foreground">
-                  {result.dr_label}{" "}
-                  {result.dr_stage === 0
-                    ? "(no retinopathy)"
-                    : result.dr_stage >= 4
-                      ? "Proliferative Diabetic Retinopathy"
-                      : "Non-Proliferative Diabetic Retinopathy"}
-                </span>
-                . {result.explanation}
-              </p>
-            </section>
-          )}
-
-          {/* Retinal image analysis */}
-          {(imageUrl || demoFundus !== null) && (
-            <section className="panel nb-pop overflow-hidden">
-              <div className="flex flex-wrap items-center justify-between gap-3 border-b px-5 py-3.5">
-                <h2 className="text-sm font-semibold text-foreground">
-                  Retinal Image Analysis
-                </h2>
-                <div className="flex items-center gap-3">
-                  {/* quality overlay */}
-                  <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-medium text-emerald-700">
-                    <span className="size-1.5 rounded-full bg-emerald-500" />
-                    Image Quality: GOOD · Gradable
-                  </span>
-                  {/* toggle */}
-                  <div className="flex overflow-hidden rounded-lg border text-xs font-medium">
-                    <button
-                      type="button"
-                      onClick={() => setViewMode("original")}
-                      className={cn(
-                        "cursor-pointer px-3 py-1.5 transition-colors",
-                        viewMode === "original"
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-card text-muted-foreground hover:bg-muted",
-                      )}
-                    >
-                      Original
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setViewMode("attention")}
-                      className={cn(
-                        "cursor-pointer px-3 py-1.5 transition-colors",
-                        viewMode === "attention"
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-card text-muted-foreground hover:bg-muted",
-                      )}
-                    >
-                      AI Attention
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setViewMode("compare")}
-                      className={cn(
-                        "cursor-pointer px-3 py-1.5 transition-colors",
-                        viewMode === "compare"
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-card text-muted-foreground hover:bg-muted",
-                      )}
-                    >
-                      Compare
-                    </button>
-                  </div>
-                  {/* zoom */}
-                  <div className="flex items-center gap-1 rounded-lg border">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const next = Math.max(1, zoom - 0.25);
-                        setZoom(next);
-                        if (next === 1) setPan({ x: 0, y: 0 });
-                      }}
-                      className="cursor-pointer rounded-l-lg p-1.5 text-muted-foreground transition-colors hover:bg-muted"
-                      aria-label="Zoom out"
-                    >
-                      <Minimize2 className="size-3.5" />
-                    </button>
-                    <span className="nb-mono w-10 text-center text-[10px] text-muted-foreground">
-                      {Math.round(zoom * 100)}%
+                  <p className="mt-4 border-t pt-4 text-[13px] leading-relaxed text-muted-foreground">
+                    AI screening indicates retinal findings consistent with{" "}
+                    <span className="font-medium text-foreground">
+                      {result.dr_label}{" "}
+                      {result.dr_stage === 0
+                        ? "(no retinopathy)"
+                        : result.dr_stage >= 4
+                          ? "Proliferative Diabetic Retinopathy"
+                          : "Non-Proliferative Diabetic Retinopathy"}
                     </span>
-                    <button
-                      type="button"
-                      onClick={() => setZoom((z) => Math.min(2, z + 0.25))}
-                      className="cursor-pointer rounded-r-lg p-1.5 text-muted-foreground transition-colors hover:bg-muted"
-                      aria-label="Zoom in"
-                    >
-                      <Maximize2 className="size-3.5" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-center justify-center bg-slate-50 p-4">
-                <div
-                  ref={compareRef}
-                  className="relative aspect-[4/3] w-full max-w-[32rem] select-none overflow-hidden rounded-lg border bg-black"
-                >
-                  {/* Original image (base layer) — uploaded file or synthetic demo fundus */}
-                  {imageUrl ? (
-                    <img
-                      src={imageUrl}
-                      alt="Uploaded fundus image"
-                      className={cn(
-                        "absolute inset-0 h-full w-full object-contain transition-transform duration-150",
-                        zoom > 1 && viewMode !== "compare" && "cursor-grab active:cursor-grabbing",
-                      )}
-                      style={{ transform: `scale(${zoom}) translate(${pan.x}px, ${pan.y}px)` }}
-                      onPointerDown={startPan}
-                      onPointerMove={movePan}
-                      onPointerUp={endPan}
-                      onPointerLeave={endPan}
-                      draggable={false}
-                    />
-                  ) : (
-                    <div
-                      className={cn(
-                        "absolute inset-0 transition-transform duration-150",
-                        zoom > 1 && viewMode !== "compare" && "cursor-grab active:cursor-grabbing",
-                      )}
-                      style={{ transform: `scale(${zoom}) translate(${pan.x}px, ${pan.y}px)` }}
-                      onPointerDown={startPan}
-                      onPointerMove={movePan}
-                      onPointerUp={endPan}
-                      onPointerLeave={endPan}
-                    >
-                      <RetinaArt stage={demoStage ?? 2} className="h-full w-full" />
-                    </div>
-                  )}
-                  {/* AI attention layer — full overlay or clipped by the compare divider */}
-                  {viewMode !== "original" && result && (
-                    <img
-                      src={`/assets/gradcam/${result.gradcam_image}`}
-                      alt="Grad-CAM attention overlay"
-                      className="pointer-events-none absolute inset-0 h-full w-full object-contain anim-fade-slow"
-                      style={{
-                        transform: `scale(${zoom}) translate(${pan.x}px, ${pan.y}px)`,
-                        opacity: viewMode === "compare" ? 0.85 : 0.72,
-                        clipPath:
-                          viewMode === "compare" ? `inset(0 0 0 ${comparePos}%)` : undefined,
-                      }}
-                      draggable={false}
-                    />
-                  )}
-                  {viewMode === "attention" && (
-                    <span className="absolute left-2 top-2 rounded-md bg-black/60 px-2 py-0.5 text-[10px] font-medium text-white">
-                      Grad-CAM · Explainability Heatmap
-                    </span>
-                  )}
-                  {!imageUrl && (
-                    <span className="absolute right-2 top-2 rounded-md bg-black/60 px-2 py-0.5 text-[10px] font-medium text-white">
-                      Demo case · synthetic fundus
-                    </span>
-                  )}
-                  {viewMode === "compare" && (
-                    <>
-                      <div
-                        className="absolute inset-y-0 z-10 w-px bg-white/90"
-                        style={{ left: `${comparePos}%` }}
-                      />
-                      <button
-                        type="button"
-                        aria-label="Drag to compare original and AI attention views"
-                        className="absolute top-1/2 z-20 flex size-8 -translate-x-1/2 -translate-y-1/2 cursor-ew-resize items-center justify-center rounded-full border border-white/70 bg-white/90 text-slate-700 shadow-md transition-transform hover:scale-105"
-                        style={{ left: `${comparePos}%` }}
-                        onPointerDown={(e) => {
-                          e.currentTarget.setPointerCapture(e.pointerId);
-                          compareDragRef.current = true;
-                        }}
-                        onPointerMove={(e) => {
-                          if (!compareDragRef.current) return;
-                          const rect = compareRef.current?.getBoundingClientRect();
-                          if (!rect) return;
-                          const pct = ((e.clientX - rect.left) / rect.width) * 100;
-                          setComparePos(Math.min(94, Math.max(6, pct)));
-                        }}
-                        onPointerUp={() => {
-                          compareDragRef.current = false;
-                        }}
-                      >
-                        <MoveHorizontal className="size-4" />
-                      </button>
-                      <span className="absolute bottom-2 left-2 rounded-md bg-black/60 px-2 py-0.5 text-[10px] font-medium text-white">
-                        Original
-                      </span>
-                      <span className="absolute bottom-2 right-2 rounded-md bg-black/60 px-2 py-0.5 text-[10px] font-medium text-white">
-                        AI Attention
-                      </span>
-                    </>
-                  )}
-                  {zoom > 1 && viewMode !== "compare" && (
-                    <span className="absolute bottom-2 left-1/2 -translate-x-1/2 rounded-md bg-black/60 px-2 py-0.5 text-[10px] font-medium text-white">
-                      Drag to pan
-                    </span>
-                  )}
-                </div>
-              </div>
-            </section>
+                    . {result.explanation}
+                  </p>
+                </section>
+              )}
+            </div>
           )}
 
           {/* Detected retinal findings — staggered reveal */}
@@ -1840,26 +1946,50 @@ export default function Chat() {
                   {result.referable ? "REFERRAL RECOMMENDED" : "NO REFERRAL"}
                 </span>
               </div>
-              <p className="mt-3 border-t border-blue-200/60 pt-3 text-xs text-muted-foreground">
-                AI screening result. Final clinical assessment remains with the
-                ophthalmologist.
+              <p className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-blue-200/60 pt-3 text-xs text-muted-foreground">
+                <span>
+                  AI screening result. Final clinical assessment remains with the
+                  ophthalmologist.
+                </span>
+                {clinicianDecision !== "pending" && (
+                  <span
+                    className={cn(
+                      "inline-flex items-center gap-1 font-semibold",
+                      clinicianDecision === "confirmed"
+                        ? "text-emerald-700"
+                        : "text-red-700",
+                    )}
+                  >
+                    {clinicianDecision === "confirmed" ? (
+                      <CircleCheck className="size-3.5" />
+                    ) : (
+                      <CircleAlert className="size-3.5" />
+                    )}
+                    {clinicianDecision === "confirmed"
+                      ? "Confirmed by clinician"
+                      : "Flagged for second opinion"}
+                  </span>
+                )}
               </p>
             </section>
           )}
 
-          {/* Ask RetinaScan AI */}
-          <section className="panel nb-pop overflow-hidden">
-            <div className="border-b px-5 py-3.5">
+          {/* Ask RetinaScan AI — contextual tool, visually subordinate to the
+             screening result above */}
+          <section className="panel overflow-hidden bg-muted/20">
+            <div className="border-b px-5 py-3">
               <div className="flex items-center gap-2">
-                <span className="flex size-7 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                  <Bot className="size-4" />
+                <span className="flex size-6 items-center justify-center rounded-md bg-muted text-muted-foreground">
+                  <Bot className="size-3.5" />
                 </span>
                 <div>
-                  <h2 className="text-sm font-semibold text-foreground">
+                  <h2 className="text-[13px] font-semibold text-foreground">
                     Ask RetinaScan AI
                   </h2>
                   <p className="text-[11px] text-muted-foreground">
-                    Ask about this screening, evidence, findings or report.
+                    {result
+                      ? "Ask about this screening, its evidence, or the report."
+                      : "Ask about diabetic retinopathy or how the pipeline works."}
                   </p>
                 </div>
               </div>
@@ -1993,7 +2123,7 @@ export default function Chat() {
 
         {/* ---------------------- RIGHT EVIDENCE PANEL ---------------------- */}
         {result && showEvidencePanel && (
-          <aside className="hidden w-80 shrink-0 xl:block">
+          <aside className="hidden w-72 shrink-0 lg:block">
             <div className="sticky top-24 space-y-4">
               <div className="panel nb-pop p-4">
                 <div className="flex items-center justify-between">
@@ -2070,18 +2200,37 @@ export default function Chat() {
                   </div>
                   <div className="border-t pt-3">
                     <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                      Protocol Version
+                      Clinician Review
                     </dt>
-                    <dd className="nb-mono mt-0.5 text-xs text-foreground">
-                      v2.4.1
+                    <dd
+                      className={cn(
+                        "mt-0.5 inline-flex items-center gap-1.5 font-medium",
+                        clinicianDecision === "confirmed" && "text-emerald-600",
+                        clinicianDecision === "flagged" && "text-red-600",
+                        clinicianDecision === "pending" && "text-amber-600",
+                      )}
+                    >
+                      {clinicianDecision === "confirmed" && (
+                        <>
+                          <CircleCheck className="size-3.5" />
+                          Confirmed
+                        </>
+                      )}
+                      {clinicianDecision === "flagged" && (
+                        <>
+                          <CircleAlert className="size-3.5" />
+                          Flagged for second opinion
+                        </>
+                      )}
+                      {clinicianDecision === "pending" && "Awaiting review"}
                     </dd>
                   </div>
                   <div>
                     <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                      Model Version
+                      Model
                     </dt>
                     <dd className="nb-mono mt-0.5 text-xs text-foreground">
-                      effnet-b0-dr · 2025-06
+                      effnet-b0-dr
                     </dd>
                   </div>
                 </dl>
